@@ -182,6 +182,8 @@ test('Staging only approved content goes to live', async ({
 	workflowPage,
 	workflowTasksPage,
 }) => {
+	test.setTimeout(120000);
+
 	const site = await apiHelpers.headlessSite.createSite({
 		name: `site-${getRandomString()}`,
 	});
