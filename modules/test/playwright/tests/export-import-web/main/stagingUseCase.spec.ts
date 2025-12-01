@@ -182,8 +182,6 @@ test('Staging only approved content goes to live', async ({
 	workflowPage,
 	workflowTasksPage,
 }) => {
-	test.setTimeout(120000);
-
 	const site = await apiHelpers.headlessSite.createSite({
 		name: `site-${getRandomString()}`,
 	});
@@ -268,6 +266,7 @@ test('Staging only approved content goes to live', async ({
 
 	await pageEditorPage.goto(layout1, stagingSite.friendlyUrlPath);
 	await reloadUntilVisible({
+		maxAttempts: 10,
 		myLocator: page.getByText(webcontentContent1, {exact: true}),
 		page,
 	});
