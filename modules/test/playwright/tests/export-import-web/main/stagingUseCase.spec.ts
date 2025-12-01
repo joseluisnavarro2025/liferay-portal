@@ -265,14 +265,11 @@ test('Staging only approved content goes to live', async ({
 	await workflowTasksPage.approve(webContent1.title);
 
 	await pageEditorPage.goto(layout1, stagingSite.friendlyUrlPath);
-	await reloadUntilVisible({
-		maxAttempts: 10,
-		myLocator: page.getByText(webcontentContent1, {exact: true}),
-		page,
-	});
-	await expect(
-		page.getByText(webcontentContent1, {exact: true})
-	).toBeVisible();
+
+	const pageViewportLocator = page.locator(
+		'.page-editor__layout-viewport__resizer'
+	);
+	await expect(pageViewportLocator).toContainText(webcontentContent1);
 
 	await pageEditorPage.goto(layout2, stagingSite.friendlyUrlPath);
 	await expect(
