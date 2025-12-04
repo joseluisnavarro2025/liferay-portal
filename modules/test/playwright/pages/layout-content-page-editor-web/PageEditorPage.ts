@@ -61,6 +61,7 @@ export class PageEditorPage {
 	readonly selectItemMappingButton: Locator;
 	readonly undoButton: Locator;
 	readonly undoHistory: Locator;
+	readonly pageEditor: Locator;
 
 	constructor(page: Page) {
 		this.page = page;
@@ -89,6 +90,7 @@ export class PageEditorPage {
 		this.selectItemMappingButton = page.getByLabel('Select Item');
 		this.undoButton = page.getByTitle('Undo');
 		this.undoHistory = page.locator('.page-editor__undo-history');
+		this.pageEditor = page.locator('.page-editor');
 	}
 
 	async goto(layout: Layout, siteUrl?: Site['friendlyUrlPath']) {
@@ -1804,6 +1806,12 @@ export class PageEditorPage {
 				'Changes have been saved. Page editor will autosave new changes.'
 			)
 			.waitFor({timeout});
+	}
+
+	async waitForPageEditorContent(text: string) {
+		await expect(async () => {
+			await expect(this.pageEditor).toContainText(text);
+		}).toPass({timeout: 30000});
 	}
 
 	getEditable({

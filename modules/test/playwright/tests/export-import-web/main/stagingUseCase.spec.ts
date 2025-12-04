@@ -266,10 +266,7 @@ test('Staging only approved content goes to live', async ({
 
 	await pageEditorPage.goto(layout1, stagingSite.friendlyUrlPath);
 
-	const pageViewportLocator = page.locator(
-		'.page-editor__layout-viewport__resizer'
-	);
-	await expect(pageViewportLocator).toContainText(webcontentContent1);
+	await pageEditorPage.waitForPageEditorContent(webcontentContent1);
 
 	await pageEditorPage.goto(layout2, stagingSite.friendlyUrlPath);
 	await expect(
