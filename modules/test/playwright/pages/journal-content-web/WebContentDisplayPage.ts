@@ -200,7 +200,7 @@ export class WebContentDisplayPage {
 			await this.uiElementsPage.closeClickable.click();
 
 			await this.page
-				.locator('header')
+				.locator('header.portlet-topper')
 				.filter({hasText: 'Web Content Display'})
 				.waitFor({state: 'visible'});
 		}
