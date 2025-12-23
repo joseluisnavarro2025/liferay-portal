@@ -43,7 +43,7 @@ export class WorkflowTasksPage {
 		await this.assignedToMyRolesLink.click();
 	}
 
-	async approve(articleTitle: string) {
+	async approve(articleTitle: string, alertAutoClose: boolean = true) {
 		const row = this.page.getByRole('row').filter({hasText: articleTitle});
 
 		await clickAndExpectToBeVisible({
@@ -56,7 +56,13 @@ export class WorkflowTasksPage {
 
 		await this.page.getByRole('button', {name: 'Done'}).click();
 
-		await waitForAlert(this.page);
+		await waitForAlert(
+			this.page,
+			'Success:Your request completed successfully.',
+			{
+				autoClose: alertAutoClose,
+			}
+		);
 	}
 
 	async assignToMe(articleTitle: string) {

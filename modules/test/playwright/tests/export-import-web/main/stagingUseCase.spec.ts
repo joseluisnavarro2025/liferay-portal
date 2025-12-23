@@ -199,7 +199,7 @@ test('Staging only approved content goes to live', async ({
 	await workflowTasksPage.assignToMe(webContent1.title);
 	await workflowTasksPage.goToAssignedToMyRoles();
 	await workflowTasksPage.assignToMe(webContent2.title);
-	await workflowTasksPage.approve(webContent1.title);
+	await workflowTasksPage.approve(webContent1.title, false);
 
 	await pageEditorPage.goto(layout1, stagingSite.friendlyUrlPath);
 	await pageEditorPage.waitForLoadingAnimationToBeHidden();
