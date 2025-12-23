@@ -5,6 +5,7 @@
 
 import {Locator, Page, expect} from '@playwright/test';
 
+import {clickAndExpectToBeVisible} from '../../../../utils/clickAndExpectToBeVisible';
 import getRandomString from '../../../../utils/getRandomString';
 
 export class StagingPage {
@@ -71,7 +72,14 @@ export class StagingPage {
 			.getByRole('button')
 			.click();
 
-		await this.page.getByRole('menuitem', {name: 'Publish'}).click();
+		await clickAndExpectToBeVisible({
+			autoClick: true,
+			target: this.page.getByRole('menuitem', {name: 'Publish'}),
+			trigger: this.page.locator(
+				'[id="_com_liferay_staging_processes_web_portlet_StagingProcessesPortlet_exportImportConfigurationsSearchContainer_1_menu"]'
+			),
+		});
+
 		await this.page.getByRole('button', {name: 'Publish to Live'}).click();
 		await expect(
 			this.page
