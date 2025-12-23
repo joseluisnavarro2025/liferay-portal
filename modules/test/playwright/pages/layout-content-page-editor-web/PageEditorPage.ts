@@ -1854,6 +1854,14 @@ export class PageEditorPage {
 			.waitFor({timeout});
 	}
 
+	async waitForLoadingAnimationToBeHidden() {
+		await this.page
+			.locator(
+				'[id*="ContentPageEditorPortlet_pageEditor"] .loading-animation'
+			)
+			.waitFor({state: 'hidden'});
+	}
+
 	getEditable({
 		editableId,
 		fragmentId,
