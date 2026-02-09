@@ -56,6 +56,7 @@ import com.liferay.portal.kernel.util.PortletKeys;
 import com.liferay.portal.kernel.util.StringUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 import com.liferay.portal.test.rule.FeatureFlag;
+import com.liferay.portal.test.rule.FeatureFlags;
 import com.liferay.portal.test.rule.Inject;
 import com.liferay.portal.test.rule.LiferayIntegrationTestRule;
 import com.liferay.segments.service.SegmentsExperienceLocalService;
@@ -139,6 +140,58 @@ public class LayoutExportImportTest extends BaseExportImportTestCase {
 				layout2.getUuid(), importedGroup.getGroupId(), false);
 
 		Assert.assertNotNull(importedLayout2);
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-35443"), @FeatureFlag("LPD-35914")}
+	)
+	@Test
+	public void testDeleteMissingLayoutsSameSiteWithPromoteContentFeatureFlags()
+		throws Exception {
+
+		Layout layoutA = LayoutTestUtil.addTypePortletLayout(group);
+		Layout layoutB = LayoutTestUtil.addTypePortletLayout(group);
+
+		long[] layoutIds = {layoutA.getLayoutId(), layoutB.getLayoutId()};
+
+		exportLayouts(layoutIds, getExportParameterMap());
+
+		Layout layoutC = LayoutTestUtil.addTypePortletLayout(group);
+
+		Group originalImportedGroup = importedGroup;
+
+		try {
+			importedGroup = group;
+
+			Map<String, String[]> parameterMap = getImportParameterMap();
+
+			parameterMap.put(
+				PortletDataHandlerKeys.DELETE_MISSING_LAYOUTS,
+				new String[] {Boolean.TRUE.toString()});
+
+			importLayouts(parameterMap);
+
+			Layout fetchedLayoutA =
+				_layoutLocalService.fetchLayoutByUuidAndGroupId(
+					layoutA.getUuid(), group.getGroupId(), false);
+
+			Assert.assertNotNull(fetchedLayoutA);
+
+			Layout fetchedLayoutB =
+				_layoutLocalService.fetchLayoutByUuidAndGroupId(
+					layoutB.getUuid(), group.getGroupId(), false);
+
+			Assert.assertNotNull(fetchedLayoutB);
+
+			Layout fetchedLayoutCAfterImport =
+				_layoutLocalService.fetchLayoutByUuidAndGroupId(
+					layoutC.getUuid(), group.getGroupId(), false);
+
+			Assert.assertNull(fetchedLayoutCAfterImport);
+		}
+		finally {
+			importedGroup = originalImportedGroup;
+		}
 	}
 
 	@Test
