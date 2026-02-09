@@ -42,7 +42,6 @@ import com.liferay.layout.seo.model.LayoutSEOEntryCustomMetaTagProperty;
 import com.liferay.layout.seo.service.LayoutSEOEntryService;
 import com.liferay.petra.string.StringBundler;
 import com.liferay.petra.string.StringPool;
-import com.liferay.portal.configuration.module.configuration.ConfigurationProviderUtil;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.feature.flag.FeatureFlagManagerUtil;
 import com.liferay.portal.kernel.log.Log;
@@ -76,7 +75,6 @@ import com.liferay.portal.vulcan.pagination.Page;
 import com.liferay.portal.vulcan.pagination.Pagination;
 import com.liferay.portal.vulcan.util.LocalizedMapUtil;
 import com.liferay.portal.vulcan.util.SearchUtil;
-import com.liferay.staging.configuration.StagingConfiguration;
 
 import jakarta.validation.ValidationException;
 
@@ -168,25 +166,6 @@ public class SitePageResourceImpl
 							return null;
 						}
 
-						boolean publishParentLayoutsByDefault = false;
-
-						try {
-							StagingConfiguration stagingConfiguration =
-								ConfigurationProviderUtil.
-									getCompanyConfiguration(
-										StagingConfiguration.class,
-										portletDataContext.getCompanyId());
-
-							publishParentLayoutsByDefault =
-								stagingConfiguration.
-									publishParentLayoutsByDefault();
-						}
-						catch (Exception exception) {
-							if (_log.isWarnEnabled()) {
-								_log.warn(exception);
-							}
-						}
-
 						Set<String> externalReferenceCodes = new HashSet<>();
 
 						externalReferenceCodes.add("");
@@ -203,37 +182,6 @@ public class SitePageResourceImpl
 								if (layout != null) {
 									externalReferenceCodes.add(
 										layout.getExternalReferenceCode());
-
-									if (publishParentLayoutsByDefault) {
-										long parentLayoutId =
-											layout.getParentLayoutId();
-
-										while ((parentLayoutId !=
-													LayoutConstants.
-														DEFAULT_PARENT_LAYOUT_ID) &&
-											   (parentLayoutId > 0)) {
-
-											Layout parentLayout =
-												_layoutService.fetchLayout(
-													portletDataContext.
-														getScopeGroupId(),
-													portletDataContext.
-														isPrivateLayout(),
-													parentLayoutId);
-
-											if (parentLayout == null) {
-												break;
-											}
-
-											externalReferenceCodes.add(
-												parentLayout.
-													getExternalReferenceCode());
-
-											parentLayoutId =
-												parentLayout.
-													getParentLayoutId();
-										}
-									}
 								}
 							}
 							catch (PortalException portalException) {
