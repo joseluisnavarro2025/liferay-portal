@@ -56,6 +56,7 @@ import com.liferay.portal.kernel.util.PortletKeys;
 import com.liferay.portal.kernel.util.StringUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 import com.liferay.portal.test.rule.FeatureFlag;
+import com.liferay.portal.test.rule.FeatureFlags;
 import com.liferay.portal.test.rule.Inject;
 import com.liferay.portal.test.rule.LiferayIntegrationTestRule;
 import com.liferay.segments.service.SegmentsExperienceLocalService;
@@ -440,6 +441,12 @@ public class LayoutExportImportTest extends BaseExportImportTestCase {
 			Arrays.asList(LocaleUtil.US, LocaleUtil.GERMANY), true);
 	}
 
+	@FeatureFlags(
+		featureFlags = {
+			@FeatureFlag(enable = false, value = "LPD-35443"),
+			@FeatureFlag(enable = false, value = "LPD-35914")
+		}
+	)
 	@Test
 	public void testExportImportLayoutsPriorities() throws Exception {
 		Layout layout1 = LayoutTestUtil.addTypePortletLayout(group);
@@ -948,6 +955,62 @@ public class LayoutExportImportTest extends BaseExportImportTestCase {
 				PortletDataException.MISSING_REFERENCE,
 				portletDataException.getType());
 		}
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-34594"), @FeatureFlag("LPD-35443")}
+	)
+	@Test
+	public void testPromotedPageWithSamePriorityTakesPrecedenceWithPromoteContentFFEnabled()
+		throws Exception {
+
+		Layout layout1 = LayoutTestUtil.addTypePortletLayout(group);
+		Layout layout2 = LayoutTestUtil.addTypePortletLayout(group);
+		Layout layout3 = LayoutTestUtil.addTypePortletLayout(group);
+
+		exportImportLayouts(
+			ExportImportHelperUtil.getLayoutIds(
+				_layoutLocalService.getLayouts(group.getGroupId(), false)),
+			getImportParameterMap());
+
+		Layout importedLayout1 =
+			_layoutLocalService.fetchLayoutByUuidAndGroupId(
+				layout1.getUuid(), importedGroup.getGroupId(), false);
+
+		Layout importedLayout2 =
+			_layoutLocalService.fetchLayoutByUuidAndGroupId(
+				layout2.getUuid(), importedGroup.getGroupId(), false);
+
+		Layout importedLayout3 =
+			_layoutLocalService.fetchLayoutByUuidAndGroupId(
+				layout3.getUuid(), importedGroup.getGroupId(), false);
+
+		importedLayout3.setPriority(1);
+
+		_layoutLocalService.updateLayout(importedLayout3);
+
+		importedLayout1.setPriority(2);
+
+		_layoutLocalService.updateLayout(importedLayout1);
+
+		importedLayout2.setPriority(3);
+
+		_layoutLocalService.updateLayout(importedLayout2);
+
+		exportImportLayouts(
+			new long[] {layout1.getLayoutId()}, getImportParameterMap());
+
+		importedLayout1 = _layoutLocalService.fetchLayoutByUuidAndGroupId(
+			layout1.getUuid(), importedGroup.getGroupId(), false);
+		importedLayout2 = _layoutLocalService.fetchLayoutByUuidAndGroupId(
+			layout2.getUuid(), importedGroup.getGroupId(), false);
+		importedLayout3 = _layoutLocalService.fetchLayoutByUuidAndGroupId(
+			layout3.getUuid(), importedGroup.getGroupId(), false);
+
+		Assert.assertTrue(
+			importedLayout3.getPriority() > importedLayout1.getPriority());
+		Assert.assertTrue(
+			importedLayout2.getPriority() > importedLayout3.getPriority());
 	}
 
 	@Test
