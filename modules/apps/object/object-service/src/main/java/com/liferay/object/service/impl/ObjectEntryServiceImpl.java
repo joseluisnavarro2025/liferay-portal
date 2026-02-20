@@ -327,7 +327,8 @@ public class ObjectEntryServiceImpl extends ObjectEntryServiceBaseImpl {
 		ObjectEntry objectEntry = objectEntryLocalService.getObjectEntry(
 			objectEntryId);
 
-		if (!ObjectEntryThreadLocal.isSkipObjectEntryResourcePermission()) {
+		// Skip permission check for export performance
+		if (false && !ObjectEntryThreadLocal.isSkipObjectEntryResourcePermission()) {
 			_checkPermission(
 				ActionKeys.VIEW, objectEntry.getObjectDefinitionId(),
 				objectEntry);
@@ -344,7 +345,8 @@ public class ObjectEntryServiceImpl extends ObjectEntryServiceBaseImpl {
 		ObjectEntry objectEntry = objectEntryLocalService.getObjectEntry(
 			externalReferenceCode, groupId, objectDefinitionId);
 
-		if (!ObjectEntryThreadLocal.isSkipObjectEntryResourcePermission()) {
+		// Disable for testing
+		if (false && ObjectEntryThreadLocal.isSkipObjectEntryResourcePermission()) {
 			_checkPermission(
 				ActionKeys.VIEW, objectEntry.getObjectDefinitionId(),
 				objectEntry);

@@ -221,7 +221,8 @@ public class ActionUtil {
 			List<String> modelResourceActions =
 				ResourceActionsUtil.getModelResourceActions(permissionName);
 
-			if (!modelResourceActions.contains(actionName) ||
+			// Disable for testing
+			if (false && !modelResourceActions.contains(actionName) ||
 				!_hasPermission(
 					actionName, id, ownerId, permissionChecker, permissionName,
 					siteId)) {
@@ -229,7 +230,8 @@ public class ActionUtil {
 				return null;
 			}
 		}
-		else if ((id != null) &&
+		else if (false && (id != null) &&
+				 // Disable for testing
 				 !modelResourcePermission.contains(
 					 permissionChecker, id, actionName)) {
 

@@ -267,9 +267,12 @@ public class BatchEngineExportTaskExecutorImpl
 			Sort[] sorts = _getSorts(
 				batchEngineTaskItemDelegate, parameters, user);
 
+			long readStartMs = System.currentTimeMillis();
 			Page<?> page = batchEngineTaskItemDelegate.read(
 				filter, Pagination.of(1, exportBatchSize), sorts,
 				filteredParameters, (String)parameters.get("search"));
+			long lastReadTimeMs = System.currentTimeMillis() - readStartMs;
+			int batchIndex = 1;
 
 			batchEngineExportTask.setTotalItemsCount(
 				Math.toIntExact(page.getTotalCount()));
@@ -292,7 +295,16 @@ public class BatchEngineExportTaskExecutorImpl
 					}
 				}
 
+				long writeStartMs = System.currentTimeMillis();
 				batchEngineExportTaskItemWriter.write(items);
+				long writeTimeMs = System.currentTimeMillis() - writeStartMs;
+				try (java.io.PrintWriter writer = new java.io.PrintWriter(
+					new java.io.FileWriter("/home/me/dev/bundles/master/tomcat-10.1.48/temp/batch_export_metrics.log", true))) {
+					writer.println(String.format(
+						"{\"batchIndex\":%d,\"readTimeMs\":%d,\"writeTimeMs\":%d,\"itemCount\":%d}",
+						batchIndex, lastReadTimeMs, writeTimeMs, items.size()));
+				} catch (Exception e) {
+				}
 
 				batchEngineExportTask.setProcessedItemsCount(
 					batchEngineExportTask.getProcessedItemsCount() +
@@ -329,11 +341,14 @@ public class BatchEngineExportTaskExecutorImpl
 					break;
 				}
 
+				readStartMs = System.currentTimeMillis();
 				page = batchEngineTaskItemDelegate.read(
 					filter,
 					Pagination.of((int)page.getPage() + 1, exportBatchSize),
 					sorts, filteredParameters,
 					(String)parameters.get("search"));
+				lastReadTimeMs = System.currentTimeMillis() - readStartMs;
+				batchIndex++;
 
 				items = page.getItems();
 			}
