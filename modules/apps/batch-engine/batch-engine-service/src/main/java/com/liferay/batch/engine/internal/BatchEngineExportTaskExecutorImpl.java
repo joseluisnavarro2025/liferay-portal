@@ -16,6 +16,7 @@ import com.liferay.batch.engine.configuration.BatchEngineTaskCompanyConfiguratio
 import com.liferay.batch.engine.csv.ColumnDescriptorProvider;
 import com.liferay.batch.engine.internal.writer.BatchEngineExportTaskItemWriter;
 import com.liferay.batch.engine.internal.writer.BatchEngineExportTaskItemWriterBuilder;
+import com.liferay.batch.engine.internal.writer.JSONBatchEngineExportTaskItemWriterImpl;
 import com.liferay.batch.engine.model.BatchEngineExportTask;
 import com.liferay.batch.engine.pagination.Page;
 import com.liferay.batch.engine.pagination.Pagination;
@@ -298,11 +299,24 @@ public class BatchEngineExportTaskExecutorImpl
 				long writeStartMs = System.currentTimeMillis();
 				batchEngineExportTaskItemWriter.write(items);
 				long writeTimeMs = System.currentTimeMillis() - writeStartMs;
+				long jsonWriterTimeMs = -1;
+				if (batchEngineExportTaskItemWriter instanceof
+						JSONBatchEngineExportTaskItemWriterImpl) {
+					jsonWriterTimeMs =
+						((JSONBatchEngineExportTaskItemWriterImpl)
+							batchEngineExportTaskItemWriter).
+								getLastJsonWriterTimeMs();
+				}
 				try (java.io.PrintWriter writer = new java.io.PrintWriter(
 					new java.io.FileWriter("/home/me/dev/bundles/master/tomcat-10.1.48/temp/batch_export_metrics.log", true))) {
-					writer.println(String.format(
-						"{\"batchIndex\":%d,\"readTimeMs\":%d,\"writeTimeMs\":%d,\"itemCount\":%d}",
-						batchIndex, lastReadTimeMs, writeTimeMs, items.size()));
+					String line = String.format(
+						"{\"batchIndex\":%d,\"readTimeMs\":%d,\"writeTimeMs\":%d,\"itemCount\":%d",
+						batchIndex, lastReadTimeMs, writeTimeMs, items.size());
+					if (jsonWriterTimeMs >= 0) {
+						line += String.format(
+							",\"jsonWriterTimeMs\":%d", jsonWriterTimeMs);
+					}
+					writer.println(line + "}");
 				} catch (Exception e) {
 				}
 

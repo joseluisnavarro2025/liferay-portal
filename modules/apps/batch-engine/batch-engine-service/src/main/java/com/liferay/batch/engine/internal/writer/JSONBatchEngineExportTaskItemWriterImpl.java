@@ -39,11 +39,18 @@ public class JSONBatchEngineExportTaskItemWriterImpl
 		_outputStream.close();
 	}
 
-	@Override
-	public void write(Collection<?> items) throws Exception {
-		_sequenceWriter.writeAll(items);
+	public long getLastJsonWriterTimeMs() {
+		return _lastJsonWriterTimeMs;
 	}
 
+	@Override
+	public void write(Collection<?> items) throws Exception {
+		long writeStartMs = System.currentTimeMillis();
+		_sequenceWriter.writeAll(items);
+		_lastJsonWriterTimeMs = System.currentTimeMillis() - writeStartMs;
+	}
+
+	private long _lastJsonWriterTimeMs;
 	private final OutputStream _outputStream;
 	private final SequenceWriter _sequenceWriter;
 
