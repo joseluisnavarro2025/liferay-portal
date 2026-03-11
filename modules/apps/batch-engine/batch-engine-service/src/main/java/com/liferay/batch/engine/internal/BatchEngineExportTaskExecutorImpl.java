@@ -40,6 +40,7 @@ import com.liferay.portal.kernel.search.filter.Filter;
 import com.liferay.portal.kernel.security.auth.CompanyThreadLocal;
 import com.liferay.portal.kernel.service.CompanyLocalService;
 import com.liferay.portal.kernel.service.UserLocalService;
+import com.liferay.portal.kernel.spring.orm.LastSessionRecorderHelperUtil;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.LocaleUtil;
 import com.liferay.portal.kernel.util.MapUtil;
@@ -59,6 +60,11 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -201,6 +207,10 @@ public class BatchEngineExportTaskExecutorImpl
 		_exportTaskPostActions.close();
 	}
 
+	private void _clearSessionPersistenceContext() {
+		LastSessionRecorderHelperUtil.syncLastSessionState();
+	}
+
 	private InputStream _exportItems(
 			BatchEngineExportTask batchEngineExportTask, Settings settings)
 		throws Exception {
@@ -267,9 +277,13 @@ public class BatchEngineExportTaskExecutorImpl
 			Sort[] sorts = _getSorts(
 				batchEngineTaskItemDelegate, parameters, user);
 
+			long readStartMs = System.currentTimeMillis();
 			Page<?> page = batchEngineTaskItemDelegate.read(
 				filter, Pagination.of(1, exportBatchSize), sorts,
 				filteredParameters, (String)parameters.get("search"));
+
+			long lastReadTimeMs = System.currentTimeMillis() - readStartMs;
+			int batchIndex = 0;
 
 			batchEngineExportTask.setTotalItemsCount(
 				Math.toIntExact(page.getTotalCount()));
@@ -279,6 +293,8 @@ public class BatchEngineExportTaskExecutorImpl
 			Collection<?> items = page.getItems();
 
 			while (!items.isEmpty()) {
+				batchIndex++;
+
 				BatchEngineExportTask finalBatchEngineExportTask =
 					batchEngineExportTask;
 
@@ -292,7 +308,16 @@ public class BatchEngineExportTaskExecutorImpl
 					}
 				}
 
+				long writeStartMs = System.currentTimeMillis();
+
 				batchEngineExportTaskItemWriter.write(items);
+
+				long writeTimeMs = System.currentTimeMillis() - writeStartMs;
+
+				_logBatchMetrics(
+					batchIndex, lastReadTimeMs, writeTimeMs, items.size());
+
+				_clearSessionPersistenceContext();
 
 				batchEngineExportTask.setProcessedItemsCount(
 					batchEngineExportTask.getProcessedItemsCount() +
@@ -329,12 +354,14 @@ public class BatchEngineExportTaskExecutorImpl
 					break;
 				}
 
+				readStartMs = System.currentTimeMillis();
 				page = batchEngineTaskItemDelegate.read(
 					filter,
 					Pagination.of((int)page.getPage() + 1, exportBatchSize),
 					sorts, filteredParameters,
 					(String)parameters.get("search"));
 
+				lastReadTimeMs = System.currentTimeMillis() - readStartMs;
 				items = page.getItems();
 			}
 
@@ -547,6 +574,61 @@ public class BatchEngineExportTaskExecutorImpl
 		zipOutputStream.putNextEntry(zipEntry);
 
 		return zipOutputStream;
+	}
+
+	private void _logBatchMetrics(
+		int batchIndex, long readTimeMs, long writeTimeMs, int itemCount) {
+
+		try {
+			StringBuilder sb = new StringBuilder();
+
+			sb.append(
+				"{\"batchIndex\":"
+			).append(
+				batchIndex
+			);
+
+			sb.append(
+				",\"readTimeMs\":"
+			).append(
+				readTimeMs
+			);
+
+			sb.append(
+				",\"writeTimeMs\":"
+			).append(
+				writeTimeMs
+			);
+
+			sb.append(
+				",\"itemCount\":"
+			).append(
+				itemCount
+			);
+
+			sb.append(
+				",\"timestamp\":"
+			).append(
+				System.currentTimeMillis()
+			);
+
+			sb.append("}\n");
+
+			Path path = Path.of(
+				"/home/me/dev/bundles/master/tomcat-10.1.52/temp" +
+					"/batch_export_metrics.log");
+
+			Files.createDirectories(path.getParent());
+
+			Files.writeString(
+				path, sb.toString(), StandardCharsets.UTF_8,
+				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+		}
+		catch (Exception exception) {
+			if (_log.isDebugEnabled()) {
+				_log.debug(exception);
+			}
+		}
 	}
 
 	private Map<String, List<String>> _toMultivaluedMap(
