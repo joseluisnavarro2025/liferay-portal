@@ -202,10 +202,6 @@ public class BatchEngineExportTaskExecutorImpl
 		_exportTaskPostActions.close();
 	}
 
-	private void _clearSessionPersistenceContext() {
-		LastSessionRecorderHelperUtil.syncLastSessionState();
-	}
-
 	private InputStream _exportItems(
 			BatchEngineExportTask batchEngineExportTask, Settings settings)
 		throws Exception {
@@ -323,7 +319,7 @@ public class BatchEngineExportTaskExecutorImpl
 							updateBatchEngineExportTask(batchEngineExportTask);
 				}
 
-				_clearSessionPersistenceContext();
+				LastSessionRecorderHelperUtil.syncLastSessionState();
 
 				if (Thread.interrupted()) {
 					throw new InterruptedException();
