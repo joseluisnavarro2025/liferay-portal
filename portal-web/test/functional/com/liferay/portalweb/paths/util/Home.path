@@ -216,12 +216,12 @@
 </tr>
 <tr>
 	<td>PAGE_HREF</td>
-	<td>//div[contains(@id,'navbar')]/ul/li/a[contains(.,'${key_pageName}')][@href='${key_href}']</td>
+	<td>xpath=(//div[contains(@id,'navbar')] | //div[@id='navigationCollapse'] | //div[contains(@class,'list-menu')])//a[contains(.,'${key_pageName}')]</td>
 	<td>Page</td>
 </tr>
 <tr>
 	<td>PAGE_HREF_BLANK</td>
-	<td>//div[contains(@id,'navbar')]/ul/li/a[contains(.,'${key_pageName}')][@href='${key_href}'][@target='_blank']</td>
+	<td>xpath=(//div[contains(@id,'navbar')] | //div[@id='navigationCollapse'])/ul/li/a[contains(.,'${key_pageName}')][@href='${key_href}'][@target='_blank']</td>
 	<td>Page</td>
 </tr>
 <tr>
