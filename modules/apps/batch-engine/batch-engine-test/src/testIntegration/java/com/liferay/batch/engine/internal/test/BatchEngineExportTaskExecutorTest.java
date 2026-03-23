@@ -17,12 +17,16 @@ import com.liferay.batch.engine.service.BatchEngineExportTaskLocalService;
 import com.liferay.blogs.model.BlogsEntry;
 import com.liferay.petra.io.unsync.UnsyncBufferedReader;
 import com.liferay.petra.string.CharPool;
+import com.liferay.petra.string.StringBundler;
 import com.liferay.portal.kernel.json.JSONArray;
 import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.model.Group;
 import com.liferay.portal.kernel.test.AssertUtils;
 import com.liferay.portal.kernel.test.TestInfo;
 import com.liferay.portal.kernel.test.rule.DataGuard;
+import com.liferay.portal.kernel.test.util.GroupTestUtil;
 import com.liferay.portal.kernel.test.util.RandomTestUtil;
+import com.liferay.portal.kernel.test.util.ServiceContextTestUtil;
 import com.liferay.portal.kernel.test.util.TestPropsValues;
 import com.liferay.portal.kernel.transaction.Propagation;
 import com.liferay.portal.kernel.transaction.TransactionConfig;
@@ -196,6 +200,82 @@ public class BatchEngineExportTaskExecutorTest
 				blogPosting.getId()
 			},
 			_parameters);
+	}
+
+	@Test
+	@TestInfo("LPD-81551")
+	public void testExportBlogPostingsToJSONFileWithMultipleBatches()
+		throws Exception {
+
+		Group group = GroupTestUtil.addGroup();
+
+		for (int i = 0; i < 3000; i++) {
+			blogsEntryLocalService.addEntry(
+				user.getUserId(), "headline" + i, "alternativeHeadline" + i,
+				null, "articleBody" + i, new Date(baseDate.getTime()), false,
+				false, null, null, null, null,
+				ServiceContextTestUtil.getServiceContext(
+					TestPropsValues.getCompanyId(), group.getGroupId(),
+					user.getUserId()));
+		}
+
+		batchReadDurations.clear();
+
+		_batchEngineExportTask =
+			_batchEngineExportTaskLocalService.addBatchEngineExportTask(
+				null, user.getCompanyId(), user.getUserId(), null,
+				BlogPosting.class.getName(), "JSON",
+				BatchEngineTaskExecuteStatus.INITIAL.name(),
+				Arrays.asList("headline", "id"),
+				HashMapBuilder.<String, Serializable>put(
+					"siteId", group.getGroupId()
+				).build(),
+				null);
+
+		_batchEngineExportTaskExecutor.execute(_batchEngineExportTask);
+
+		int batchCount = batchReadDurations.size();
+
+		System.out.println("Batch count: " + batchCount);
+
+		for (int i = 0; i < batchCount; i++) {
+			System.out.println(
+				StringBundler.concat(
+					"Batch ", i + 1, " read time: ", batchReadDurations.get(i),
+					"ms"));
+		}
+
+		Assert.assertTrue(
+			"Expected at least 20 batches but got " + batchCount,
+			batchCount >= 20);
+
+		long first10Average = 0;
+
+		for (int i = 0; i < 10; i++) {
+			first10Average += batchReadDurations.get(i);
+		}
+
+		first10Average = first10Average / 10;
+
+		long last10Average = 0;
+
+		for (int i = batchCount - 10; i < batchCount; i++) {
+			last10Average += batchReadDurations.get(i);
+		}
+
+		last10Average = last10Average / 10;
+
+		System.out.println(
+			StringBundler.concat(
+				"First 10 batches average: ", first10Average,
+				"ms, Last 10 batches average: ", last10Average, "ms"));
+
+		Assert.assertTrue(
+			StringBundler.concat(
+				"Read time degradation detected: first 10 batches average ",
+				first10Average, "ms, last 10 batches average ", last10Average,
+				"ms. Last 10 should not be more than 2x the first 10"),
+			last10Average <= (first10Average * 2));
 	}
 
 	@Test
