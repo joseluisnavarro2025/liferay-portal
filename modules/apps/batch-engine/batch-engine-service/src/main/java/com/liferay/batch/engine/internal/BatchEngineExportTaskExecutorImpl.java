@@ -268,9 +268,14 @@ public class BatchEngineExportTaskExecutorImpl
 			Sort[] sorts = _getSorts(
 				batchEngineTaskItemDelegate, parameters, user);
 
+			long readStartTimeNs = System.nanoTime();
+
 			Page<?> page = batchEngineTaskItemDelegate.read(
 				filter, Pagination.of(1, exportBatchSize), sorts,
 				filteredParameters, (String)parameters.get("search"));
+
+			long readTimeMs = (System.nanoTime() - readStartTimeNs) / 1_000_000;
+			int batchIndex = 1;
 
 			batchEngineExportTask.setTotalItemsCount(
 				Math.toIntExact(page.getTotalCount()));
@@ -293,7 +298,12 @@ public class BatchEngineExportTaskExecutorImpl
 					}
 				}
 
+				long writeStartTimeNs = System.nanoTime();
+
 				batchEngineExportTaskItemWriter.write(items);
+
+				long writeTimeMs =
+					(System.nanoTime() - writeStartTimeNs) / 1_000_000;
 
 				batchEngineExportTask.setProcessedItemsCount(
 					batchEngineExportTask.getProcessedItemsCount() +
@@ -319,7 +329,23 @@ public class BatchEngineExportTaskExecutorImpl
 							updateBatchEngineExportTask(batchEngineExportTask);
 				}
 
+				long syncStartTimeNs = System.nanoTime();
+
 				LastSessionRecorderHelperUtil.syncLastSessionState();
+
+				long syncLastSessionTimeMs =
+					(System.nanoTime() - syncStartTimeNs) / 1_000_000;
+
+				System.out.println(
+					String.format(
+						"{\"event\":\"batchExportMetrics\",\"batchIndex\":" +
+							"%d,\"readTimeMs\":%d,\"writeTimeMs\":%d," +
+								"\"syncLastSessionTimeMs\":%d," +
+									"\"itemCount\":%d,\"processedItemsCount\":" +
+										"%d}",
+						batchIndex, readTimeMs, writeTimeMs,
+						syncLastSessionTimeMs, items.size(),
+						batchEngineExportTask.getProcessedItemsCount()));
 
 				if (Thread.interrupted()) {
 					throw new InterruptedException();
@@ -332,11 +358,16 @@ public class BatchEngineExportTaskExecutorImpl
 					break;
 				}
 
+				readStartTimeNs = System.nanoTime();
+
 				page = batchEngineTaskItemDelegate.read(
 					filter,
 					Pagination.of((int)page.getPage() + 1, exportBatchSize),
 					sorts, filteredParameters,
 					(String)parameters.get("search"));
+
+				readTimeMs = (System.nanoTime() - readStartTimeNs) / 1_000_000;
+				batchIndex++;
 
 				items = page.getItems();
 			}

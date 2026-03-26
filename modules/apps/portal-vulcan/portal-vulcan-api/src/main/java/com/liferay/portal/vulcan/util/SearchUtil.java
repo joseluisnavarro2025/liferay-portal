@@ -100,15 +100,49 @@ public class SearchUtil {
 		searchContextUnsafeConsumer.accept(searchContext);
 
 		if (searchContext.isVulcanCheckPermissions()) {
+			long searchStartNs = System.nanoTime();
+
 			hits = indexer.search(searchContext);
+
+			long searchTimeMs = (System.nanoTime() - searchStartNs) / 1_000_000;
+
+			long countStartNs = System.nanoTime();
+
 			totalCount = indexer.searchCount(searchContext);
+
+			long countTimeMs = (System.nanoTime() - countStartNs) / 1_000_000;
+
+			System.out.println(
+				String.format(
+					"[VulcanSearch] indexer=%s start=%d end=%d searchMs=%d " +
+						"countMs=%d hits=%d total=%d",
+					indexer.getClassName(), searchContext.getStart(),
+					searchContext.getEnd(), searchTimeMs, countTimeMs,
+					hits.getLength(), totalCount));
 		}
 		else {
 			Query query = indexer.getFullQuery(searchContext);
 
+			long searchStartNs = System.nanoTime();
+
 			hits = IndexSearcherHelperUtil.search(searchContext, query);
+
+			long searchTimeMs = (System.nanoTime() - searchStartNs) / 1_000_000;
+
+			long countStartNs = System.nanoTime();
+
 			totalCount = IndexSearcherHelperUtil.searchCount(
 				searchContext, query);
+
+			long countTimeMs = (System.nanoTime() - countStartNs) / 1_000_000;
+
+			System.out.println(
+				String.format(
+					"[VulcanSearch] indexer=%s start=%d end=%d searchMs=%d " +
+						"countMs=%d hits=%d total=%d",
+					indexer.getClassName(), searchContext.getStart(),
+					searchContext.getEnd(), searchTimeMs, countTimeMs,
+					hits.getLength(), totalCount));
 		}
 
 		List<T> items = new ArrayList<>();

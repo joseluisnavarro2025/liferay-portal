@@ -168,6 +168,8 @@ public class BaseBatchEngineTaskExecutorTest {
 	public class TestBlogPostingBatchEngineTaskItemDelegate
 		extends BaseBatchEngineTaskItemDelegate<BlogPosting> {
 
+		private static final boolean _PRINT_READ_TIMINGS = false;
+
 		@Override
 		public void create(
 				Collection<BlogPosting> blogPostings,
@@ -241,6 +243,20 @@ public class BaseBatchEngineTaskExecutorTest {
 
 			long startTime = System.currentTimeMillis();
 
+			if (_PRINT_READ_TIMINGS) {
+				System.out.println(
+					"[BatchEngineTest] read() siteId=" + siteId +
+						", search=" + search + ", filter=" +
+							(filter != null) + ", pagination=" +
+								((pagination != null) ?
+									(pagination.getStartPosition() + ".." +
+										pagination.getEndPosition()) :
+											"null") +
+												", sorts=" +
+													((sorts != null) ?
+														sorts.length : 0));
+			}
+
 			Page<BlogPosting> page = _search(
 				booleanQuery -> {
 				},
@@ -255,7 +271,7 @@ public class BaseBatchEngineTaskExecutorTest {
 				},
 				sorts,
 				document -> _toBlogPosting(
-					_blogsEntryService.getEntry(
+					_getBlogsEntry(
 						GetterUtil.getLong(
 							document.get(Field.ENTRY_CLASS_PK)))));
 
@@ -400,13 +416,47 @@ public class BaseBatchEngineTaskExecutorTest {
 
 			searchContextUnsafeConsumer.accept(searchContext);
 
+			long searchStart = System.nanoTime();
+
 			Hits hits = indexer.search(searchContext);
+
+			long searchTookMs = (System.nanoTime() - searchStart) / 1_000_000;
+
+			long countStart = System.nanoTime();
+
+			long total = indexer.searchCount(searchContext);
+
+			long countTookMs = (System.nanoTime() - countStart) / 1_000_000;
+
+			if (_PRINT_READ_TIMINGS) {
+				System.out.println(
+					"[BatchEngineTest] indexer.search took " + searchTookMs +
+						"ms, docs=" + hits.getLength() +
+							"; indexer.searchCount took " + countTookMs +
+								"ms, total=" + total);
+			}
 
 			return Page.of(
 				TransformUtil.transformToList(
 					hits.getDocs(),
 					document -> transformUnsafeFunction.apply(document)),
-				pagination, indexer.searchCount(searchContext));
+				pagination, total);
+		}
+
+		private BlogsEntry _getBlogsEntry(long entryId) throws Exception {
+			long start = System.nanoTime();
+
+			BlogsEntry blogsEntry = _blogsEntryService.getEntry(entryId);
+
+			long tookMs = (System.nanoTime() - start) / 1_000_000;
+
+			if (_PRINT_READ_TIMINGS) {
+				System.out.println(
+					"[BatchEngineTest] BlogsEntryService.getEntry(" + entryId +
+						") took " + tookMs + "ms");
+			}
+
+			return blogsEntry;
 		}
 
 		private BlogPosting _toBlogPosting(BlogsEntry blogsEntry) {
