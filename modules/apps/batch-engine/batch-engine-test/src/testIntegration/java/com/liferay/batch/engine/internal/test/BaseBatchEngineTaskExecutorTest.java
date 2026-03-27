@@ -32,6 +32,7 @@ import com.liferay.portal.kernel.search.SearchContext;
 import com.liferay.portal.kernel.search.Sort;
 import com.liferay.portal.kernel.search.filter.BooleanFilter;
 import com.liferay.portal.kernel.search.filter.Filter;
+import com.liferay.portal.kernel.search.filter.RangeTermFilter;
 import com.liferay.portal.kernel.search.generic.BooleanQueryImpl;
 import com.liferay.portal.kernel.search.generic.MatchAllQuery;
 import com.liferay.portal.kernel.security.permission.PermissionChecker;
@@ -169,6 +170,14 @@ public class BaseBatchEngineTaskExecutorTest {
 		extends BaseBatchEngineTaskItemDelegate<BlogPosting> {
 
 		private static final boolean _PRINT_READ_TIMINGS = false;
+
+		/**
+		 * Cursor state for sequential batch export reads (same delegate instance).
+		 * Avoids deep offset ({@code start}) cost by filtering
+		 * {@link Field#ENTRY_CLASS_PK} &gt; last PK and using {@code start=0}.
+		 */
+		private Long _exportCursorLastEntryClassPK;
+		private Long _exportCursorTotalCount;
 
 		@Override
 		public void create(
@@ -317,7 +326,7 @@ public class BaseBatchEngineTaskExecutorTest {
 
 		private SearchContext _createSearchContext(
 				BooleanClause<?> booleanClause, String keywords,
-				Pagination pagination,
+				Integer searchStart, Integer searchEnd,
 				UnsafeConsumer<QueryConfig, Exception>
 					queryConfigUnsafeConsumer,
 				Sort[] sorts)
@@ -335,15 +344,15 @@ public class BaseBatchEngineTaskExecutorTest {
 			searchContext.setBooleanClauses(
 				new BooleanClause[] {booleanClause});
 
-			if (pagination != null) {
-				searchContext.setEnd(pagination.getEndPosition());
+			if (searchEnd != null) {
+				searchContext.setEnd(searchEnd.intValue());
 			}
 
 			searchContext.setKeywords(keywords);
 			searchContext.setSorts(sorts);
 
-			if (pagination != null) {
-				searchContext.setStart(pagination.getStartPosition());
+			if (searchStart != null) {
+				searchContext.setStart(searchStart.intValue());
 			}
 
 			PermissionChecker permissionChecker =
@@ -367,7 +376,7 @@ public class BaseBatchEngineTaskExecutorTest {
 		private BooleanClause<?> _getBooleanClause(
 				UnsafeConsumer<BooleanQuery, Exception>
 					booleanQueryUnsafeConsumer,
-				Filter filter)
+				Filter filter, Long cursorAfterEntryClassPK)
 			throws Exception {
 
 			BooleanQuery booleanQuery = new BooleanQueryImpl();
@@ -378,6 +387,15 @@ public class BaseBatchEngineTaskExecutorTest {
 
 			if (filter != null) {
 				booleanFilter.add(filter, BooleanClauseOccur.MUST);
+			}
+
+			if (cursorAfterEntryClassPK != null) {
+				RangeTermFilter rangeTermFilter = new RangeTermFilter(
+					Field.ENTRY_CLASS_PK, false, true,
+					String.valueOf(cursorAfterEntryClassPK),
+					String.valueOf(Long.MAX_VALUE));
+
+				booleanFilter.add(rangeTermFilter, BooleanClauseOccur.MUST);
 			}
 
 			booleanQuery.setPreBooleanFilter(booleanFilter);
@@ -401,26 +419,79 @@ public class BaseBatchEngineTaskExecutorTest {
 					transformUnsafeFunction)
 			throws Exception {
 
-			if (sorts == null) {
-				sorts = new Sort[] {
-					new Sort(Field.ENTRY_CLASS_PK, Sort.LONG_TYPE, false)
-				};
-			}
+			Sort[] resolvedSorts = _getBlogExportSorts(sorts);
+			boolean useCursor = _useCursorPagination(pagination, sorts);
+
+			_resetExportCursor(useCursor, pagination);
+
+			CursorSearchParams cursorSearchParams = _cursorSearchParams(
+				useCursor, pagination);
 
 			Indexer<?> indexer = IndexerRegistryUtil.getIndexer(
 				(Class<?>)BlogsEntry.class);
 
 			SearchContext searchContext = _createSearchContext(
-				_getBooleanClause(booleanQueryUnsafeConsumer, filter), keywords,
-				pagination, queryConfigUnsafeConsumer, sorts);
+				_getBooleanClause(
+					booleanQueryUnsafeConsumer, filter,
+					cursorSearchParams.cursorAfterEntryClassPK),
+				keywords, cursorSearchParams.searchStart, cursorSearchParams.searchEnd,
+				queryConfigUnsafeConsumer, resolvedSorts);
 
 			searchContextUnsafeConsumer.accept(searchContext);
 
-			long searchStart = System.nanoTime();
+			long indexerSearchStart = System.nanoTime();
 
 			Hits hits = indexer.search(searchContext);
 
-			long searchTookMs = (System.nanoTime() - searchStart) / 1_000_000;
+			long searchTookMs =
+				(System.nanoTime() - indexerSearchStart) / 1_000_000;
+
+			ExportTotalResult exportTotalResult = _getExportTotalResult(
+				indexer, searchContext, useCursor, pagination, cursorSearchParams);
+
+			if (_PRINT_READ_TIMINGS) {
+				System.out.println(
+					"[BatchEngineTest] indexer.search took " + searchTookMs +
+						"ms, docs=" + hits.getLength() +
+							"; indexer.searchCount took " +
+								exportTotalResult.countTookMs + "ms, total=" +
+									exportTotalResult.total +
+										", cursorContinuation=" +
+											cursorSearchParams.cursorContinuation);
+			}
+
+			Document[] docs = hits.getDocs();
+
+			_updateCursor(useCursor, docs);
+
+			return Page.of(
+				TransformUtil.transformToList(
+					docs, document -> transformUnsafeFunction.apply(document)),
+				pagination, exportTotalResult.total);
+		}
+
+		private void _updateCursor(
+			boolean useCursor, Document[] docs) {
+
+			if (!useCursor || (docs.length == 0)) {
+				return;
+			}
+
+			Document lastDocument = docs[docs.length - 1];
+
+			_exportCursorLastEntryClassPK = GetterUtil.getLong(
+				lastDocument.get(Field.ENTRY_CLASS_PK));
+		}
+
+		private ExportTotalResult _getExportTotalResult(
+				Indexer<?> indexer, SearchContext searchContext,
+				boolean useCursor, Pagination pagination,
+				CursorSearchParams cursorSearchParams)
+			throws Exception {
+
+			if (cursorSearchParams.cursorContinuation) {
+				return new ExportTotalResult(_exportCursorTotalCount, 0);
+			}
 
 			long countStart = System.nanoTime();
 
@@ -428,19 +499,119 @@ public class BaseBatchEngineTaskExecutorTest {
 
 			long countTookMs = (System.nanoTime() - countStart) / 1_000_000;
 
-			if (_PRINT_READ_TIMINGS) {
-				System.out.println(
-					"[BatchEngineTest] indexer.search took " + searchTookMs +
-						"ms, docs=" + hits.getLength() +
-							"; indexer.searchCount took " + countTookMs +
-								"ms, total=" + total);
+			if (useCursor && (pagination != null) &&
+				(pagination.getPage() == 1)) {
+
+				_exportCursorTotalCount = total;
 			}
 
-			return Page.of(
-				TransformUtil.transformToList(
-					hits.getDocs(),
-					document -> transformUnsafeFunction.apply(document)),
-				pagination, total);
+			return new ExportTotalResult(total, countTookMs);
+		}
+
+		private CursorSearchParams _cursorSearchParams(
+			boolean useCursor, Pagination pagination) {
+
+			boolean cursorContinuation =
+				useCursor && (pagination != null) &&
+				(pagination.getPage() > 1) &&
+				(_exportCursorLastEntryClassPK != null) &&
+				(_exportCursorTotalCount != null);
+
+			if (cursorContinuation) {
+				return new CursorSearchParams(
+					0, pagination.getPageSize(),
+					_exportCursorLastEntryClassPK, true);
+			}
+
+			if (pagination != null) {
+				return new CursorSearchParams(
+					pagination.getStartPosition(),
+					pagination.getEndPosition(), null, false);
+			}
+
+			return new CursorSearchParams(null, null, null, false);
+		}
+
+		private void _resetExportCursor(
+			boolean useCursor, Pagination pagination) {
+
+			if (!useCursor) {
+				_exportCursorLastEntryClassPK = null;
+				_exportCursorTotalCount = null;
+			}
+			else if ((pagination != null) && (pagination.getPage() == 1)) {
+				_exportCursorLastEntryClassPK = null;
+				_exportCursorTotalCount = null;
+			}
+		}
+
+		private Sort[] _getBlogExportSorts(Sort[] sorts) {
+			if (sorts != null) {
+				return sorts;
+			}
+
+			return new Sort[] {
+				new Sort(Field.ENTRY_CLASS_PK, Sort.LONG_TYPE, false)
+			};
+		}
+
+		private boolean _useCursorPagination(
+			Pagination pagination, Sort[] sorts) {
+
+			if ((pagination == null) || (pagination.getPage() < 1) ||
+				(pagination.getPageSize() <= 0)) {
+
+				return false;
+			}
+
+			if (sorts == null) {
+				return true;
+			}
+
+			if (sorts.length != 1) {
+				return false;
+			}
+
+			Sort sort = sorts[0];
+
+			if (sort.isReverse() || (sort.getType() != Sort.LONG_TYPE) ||
+				!Field.ENTRY_CLASS_PK.equals(sort.getFieldName())) {
+
+				return false;
+			}
+
+			return true;
+		}
+
+		private static class ExportTotalResult {
+
+			private ExportTotalResult(long total, long countTookMs) {
+				this.countTookMs = countTookMs;
+				this.total = total;
+			}
+
+			private final long countTookMs;
+			private final long total;
+
+		}
+
+		private static class CursorSearchParams {
+
+			private CursorSearchParams(
+				Integer searchStart, Integer searchEnd,
+				Long cursorAfterEntryClassPK, boolean cursorContinuation) {
+
+				this.cursorAfterEntryClassPK = cursorAfterEntryClassPK;
+				this.cursorContinuation = cursorContinuation;
+				this.searchEnd = searchEnd;
+				this.searchStart = searchStart;
+			}
+
+			private final Long cursorAfterEntryClassPK;
+			private final boolean cursorContinuation;
+			private final Integer searchEnd;
+			private final Integer searchStart;
+
 		}
 
 		private BlogsEntry _getBlogsEntry(long entryId) throws Exception {
