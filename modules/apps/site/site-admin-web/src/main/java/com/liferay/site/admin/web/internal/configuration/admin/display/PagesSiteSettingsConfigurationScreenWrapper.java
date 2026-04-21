@@ -72,7 +72,7 @@ public class PagesSiteSettingsConfigurationScreenWrapper
 
 		@Override
 		public String getName(Locale locale) {
-			return _language.get(locale, "pages");
+			return _language.get(locale, "site-template-sync");
 		}
 
 		@Override
