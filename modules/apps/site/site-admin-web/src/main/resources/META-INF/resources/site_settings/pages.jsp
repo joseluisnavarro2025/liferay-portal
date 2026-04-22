@@ -44,8 +44,6 @@ if (!LanguageUtil.isInheritLocales(siteGroup.getGroupId()) && !siteAdminConfigur
 boolean hasUnlinkLayoutSetPrototypePermission = PortalPermissionUtil.contains(permissionChecker, ActionKeys.UNLINK_LAYOUT_SET_PROTOTYPE);
 %>
 
-<div class="sheet-subtitle"><liferay-ui:message key="site-template-sync" /></div>
-
 <aui:field-wrapper cssClass="form-group">
 	<c:choose>
 		<c:when test="<%= (publicLayoutSetPrototype == null) && (siteGroup.getPublicLayoutsPageCount() == 0) && !layoutSetPrototypes.isEmpty() %>">
@@ -93,6 +91,19 @@ boolean hasUnlinkLayoutSetPrototypePermission = PortalPermissionUtil.contains(pe
 			</c:if>
 		</c:when>
 		<c:otherwise>
+			<c:if test="<%= publicLayoutSetPrototype == null %>">
+				<c:choose>
+					<c:when test="<%= siteGroup.getPublicLayoutsPageCount() > 0 %>">
+						<aui:a href="<%= siteGroup.getDisplayURL(themeDisplay, false) %>" label="open-pages" target="_blank" />
+					</c:when>
+					<c:otherwise>
+						<p class="small text-secondary">
+							<liferay-ui:message key="this-site-does-not-have-any-pages" />
+						</p>
+					</c:otherwise>
+				</c:choose>
+			</c:if>
+
 			<c:choose>
 				<c:when test="<%= (publicLayoutSetPrototype != null) && !siteGroup.isStaged() && hasUnlinkLayoutSetPrototypePermission %>">
 					<c:if test="<%= disableLayoutSetPrototypeInput %>">
