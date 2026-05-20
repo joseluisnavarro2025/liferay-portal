@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.liferay.mcp.server.internal.configuration.MCPServerConfiguration;
 import com.liferay.mcp.server.internal.constants.MCPServerConstants;
+import com.liferay.mcp.server.internal.datamasking.DataMaskingService;
 import com.liferay.mcp.server.internal.util.OpenAPIUtil;
 import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
@@ -61,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
@@ -159,6 +161,12 @@ public class MCPServerServlet extends HttpServlet {
 		servlet.service(httpServletRequest, httpServletResponse);
 	}
 
+	@Activate
+	protected void activate() {
+		_dataMaskingService = new DataMaskingService(
+			_objectDefinitionLocalService, _objectEntryLocalService);
+	}
+
 	private Servlet _buildServlet(
 		String authorization, String baseURL, long companyId,
 		MCPServerProfile mcpServerProfile) {
@@ -205,10 +213,11 @@ public class MCPServerServlet extends HttpServlet {
 											baseURL, endpoint);
 
 								return _call(
-									httpCallArguments.getBody(),
+									httpCallArguments.getBody(), companyId,
 									httpCallArguments.getURL(),
 									mcpTransportContext,
-									httpCallArguments.getMethod());
+									httpCallArguments.getMethod(),
+									mcpServerProfile._objectEntryId);
 							})));
 		}
 		else {
@@ -228,27 +237,27 @@ public class MCPServerServlet extends HttpServlet {
 						}
 
 						return _call(
-							String.valueOf(arguments.get("payload")),
+							String.valueOf(arguments.get("payload")), companyId,
 							baseURL + path, mcpTransportContext,
-							String.valueOf(arguments.get("method")));
+							String.valueOf(arguments.get("method")), 0);
 					}));
 			syncToolSpecifications.add(
 				new McpStatelessServerFeatures.SyncToolSpecification(
 					_getTool("get-openapi", toolsJSONObject),
 					(mcpTransportContext, callToolRequest) -> _call(
-						null,
+						null, companyId,
 						String.valueOf(
 							callToolRequest.arguments(
 							).get(
 								"url"
 							)),
-						mcpTransportContext, "GET")));
+						mcpTransportContext, "GET", 0)));
 			syncToolSpecifications.add(
 				new McpStatelessServerFeatures.SyncToolSpecification(
 					_getTool("get-openapis", toolsJSONObject),
 					(mcpTransportContext, callToolRequest) -> _call(
-						null, baseURL + "/openapi", mcpTransportContext,
-						"GET")));
+						null, companyId, baseURL + "/openapi",
+						mcpTransportContext, "GET", 0)));
 		}
 
 		McpStatelessSyncServer mcpStatelessSyncServer = McpServer.sync(
@@ -303,8 +312,9 @@ public class MCPServerServlet extends HttpServlet {
 	}
 
 	private McpSchema.CallToolResult _call(
-		String body, String location, McpTransportContext mcpTransportContext,
-		String method) {
+		String body, long companyId, String location,
+		McpTransportContext mcpTransportContext, String method,
+		long profileObjectEntryId) {
 
 		Http.Options options = new Http.Options();
 
@@ -356,6 +366,9 @@ public class MCPServerServlet extends HttpServlet {
 			Http.Response response = options.getResponse();
 
 			int responseCode = response.getResponseCode();
+
+			content = _dataMaskingService.redact(
+				companyId, profileObjectEntryId, content);
 
 			if (responseCode < 300) {
 				return McpSchema.CallToolResult.builder(
@@ -410,7 +423,7 @@ public class MCPServerServlet extends HttpServlet {
 			if (profileName.equals(values.get("name"))) {
 				return new MCPServerProfile(
 					StringUtil.splitLines((String)values.get("endpoints")),
-					profileName);
+					profileName, objectEntry.getObjectEntryId());
 			}
 		}
 
@@ -574,6 +587,8 @@ public class MCPServerServlet extends HttpServlet {
 	@Reference
 	private ConfigurationProvider _configurationProvider;
 
+	private DataMaskingService _dataMaskingService;
+
 	@Reference
 	private Http _http;
 
@@ -593,13 +608,17 @@ public class MCPServerServlet extends HttpServlet {
 
 	private static class MCPServerProfile {
 
-		public MCPServerProfile(String[] endpoints, String name) {
+		public MCPServerProfile(
+			String[] endpoints, String name, long objectEntryId) {
+
 			_endpoints = endpoints;
 			_name = name;
+			_objectEntryId = objectEntryId;
 		}
 
 		private final String[] _endpoints;
 		private final String _name;
+		private final long _objectEntryId;
 
 	}
 
