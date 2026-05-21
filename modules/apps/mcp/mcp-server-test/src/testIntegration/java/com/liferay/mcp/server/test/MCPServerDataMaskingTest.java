@@ -18,6 +18,7 @@ import com.liferay.portal.kernel.test.rule.AggregateTestRule;
 import com.liferay.portal.kernel.test.util.RandomTestUtil;
 import com.liferay.portal.kernel.test.util.ServiceContextTestUtil;
 import com.liferay.portal.kernel.test.util.TestPropsValues;
+import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.HashMapDictionaryBuilder;
 import com.liferay.portal.kernel.util.PortalUtil;
@@ -99,11 +100,9 @@ public class MCPServerDataMaskingTest {
 
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email addresses");
 
-		Assert.assertNotNull(emailMaskObjectEntry);
-
-		_addProfileDataMask(
+		_setProfileDataMaskInactive(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), false, 1);
+			emailMaskObjectEntry.getObjectEntryId());
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -130,8 +129,6 @@ public class MCPServerDataMaskingTest {
 
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email addresses");
 
-		Assert.assertNotNull(emailMaskObjectEntry);
-
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
 			emailMaskObjectEntry.getObjectEntryId(), true, 1);
@@ -157,8 +154,6 @@ public class MCPServerDataMaskingTest {
 			"GET /mcp/server-profiles");
 
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email addresses");
-
-		Assert.assertNotNull(emailMaskObjectEntry);
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
@@ -189,8 +184,6 @@ public class MCPServerDataMaskingTest {
 
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email addresses");
 
-		Assert.assertNotNull(emailMaskObjectEntry);
-
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
 			domainMaskObjectEntry.getObjectEntryId(), true, 1);
@@ -211,6 +204,29 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-86164"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
+	public void testProfileDataMasksAreDeletedOnProfileRemove()
+		throws Exception {
+
+		String profileName = RandomTestUtil.randomString();
+
+		ObjectEntry profileObjectEntry = _addProfile(
+			profileName, "Contact: " + _SAMPLE_EMAIL,
+			"GET /mcp/server-profiles");
+
+		long profileObjectEntryId = profileObjectEntry.getObjectEntryId();
+
+		Assert.assertEquals(
+			_SYSTEM_MASK_COUNT, _countProfileDataMasks(profileObjectEntryId));
+
+		_objectEntryLocalService.deleteObjectEntry(profileObjectEntry);
+
+		Assert.assertEquals(0, _countProfileDataMasks(profileObjectEntryId));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-86164"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
 	public void testRedactionContinuesWhenOneMaskThrows() throws Exception {
 		String profileName = RandomTestUtil.randomString();
 
@@ -222,8 +238,6 @@ public class MCPServerDataMaskingTest {
 			RandomTestUtil.randomString(), "Contact", "$5-no-such-group");
 
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email addresses");
-
-		Assert.assertNotNull(emailMaskObjectEntry);
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
@@ -239,6 +253,24 @@ public class MCPServerDataMaskingTest {
 		Assert.assertThat(
 			responseText,
 			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_EMAIL)));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-86164"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testSystemMasksAreAutoAttachedOnProfileCreate()
+		throws Exception {
+
+		String profileName = RandomTestUtil.randomString();
+
+		ObjectEntry profileObjectEntry = _addProfile(
+			profileName, "Contact: " + _SAMPLE_EMAIL,
+			"GET /mcp/server-profiles");
+
+		Assert.assertEquals(
+			_SYSTEM_MASK_COUNT,
+			_countProfileDataMasks(profileObjectEntry.getObjectEntryId()));
 	}
 
 	private ObjectEntry _addCustomMask(
@@ -344,6 +376,68 @@ public class MCPServerDataMaskingTest {
 		}
 	}
 
+	private int _countProfileDataMasks(long profileObjectEntryId)
+		throws Exception {
+
+		ObjectDefinition profileDataMaskObjectDefinition =
+			_objectDefinitionLocalService.
+				fetchObjectDefinitionByExternalReferenceCode(
+					"L_MCP_SERVER_PROFILE_DATA_MASK",
+					TestPropsValues.getCompanyId());
+
+		int count = 0;
+
+		for (ObjectEntry profileDataMaskObjectEntry :
+				_objectEntryLocalService.getObjectEntries(
+					0, profileDataMaskObjectDefinition.getObjectDefinitionId(),
+					QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+
+			Map<String, Serializable> values =
+				profileDataMaskObjectEntry.getValues();
+
+			if (GetterUtil.getLong(values.get("mcpServerProfileId")) ==
+					profileObjectEntryId) {
+
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	private ObjectEntry _findProfileDataMask(
+			long profileObjectEntryId, long maskObjectEntryId)
+		throws Exception {
+
+		ObjectDefinition profileDataMaskObjectDefinition =
+			_objectDefinitionLocalService.
+				fetchObjectDefinitionByExternalReferenceCode(
+					"L_MCP_SERVER_PROFILE_DATA_MASK",
+					TestPropsValues.getCompanyId());
+
+		for (ObjectEntry profileDataMaskObjectEntry :
+				_objectEntryLocalService.getObjectEntries(
+					0, profileDataMaskObjectDefinition.getObjectDefinitionId(),
+					QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+
+			Map<String, Serializable> values =
+				profileDataMaskObjectEntry.getValues();
+
+			long mcpServerProfileId = GetterUtil.getLong(
+				values.get("mcpServerProfileId"));
+			long mcpServerDataMaskId = GetterUtil.getLong(
+				values.get("r_dataMaskToProfileDataMasks_mcpServerDataMaskId"));
+
+			if ((mcpServerProfileId == profileObjectEntryId) &&
+				(mcpServerDataMaskId == maskObjectEntryId)) {
+
+				return profileDataMaskObjectEntry;
+			}
+		}
+
+		return null;
+	}
+
 	private ObjectEntry _findSystemMask(String name) throws Exception {
 		ObjectDefinition objectDefinition =
 			_objectDefinitionLocalService.
@@ -404,6 +498,20 @@ public class MCPServerDataMaskingTest {
 		).build();
 	}
 
+	private void _setProfileDataMaskInactive(
+			long profileObjectEntryId, long maskObjectEntryId)
+		throws Exception {
+
+		ObjectEntry profileDataMaskObjectEntry = _findProfileDataMask(
+			profileObjectEntryId, maskObjectEntryId);
+
+		Assert.assertNotNull(profileDataMaskObjectEntry);
+
+		_objectEntryLocalService.deleteObjectEntry(profileDataMaskObjectEntry);
+
+		_addProfileDataMask(profileObjectEntryId, maskObjectEntryId, false, 1);
+	}
+
 	private void _updateMCPServerConfiguration(boolean enabled)
 		throws Exception {
 
@@ -418,6 +526,8 @@ public class MCPServerDataMaskingTest {
 	}
 
 	private static final String _SAMPLE_EMAIL = "contact@example.com";
+
+	private static final int _SYSTEM_MASK_COUNT = 9;
 
 	@Inject
 	private ObjectDefinitionLocalService _objectDefinitionLocalService;
