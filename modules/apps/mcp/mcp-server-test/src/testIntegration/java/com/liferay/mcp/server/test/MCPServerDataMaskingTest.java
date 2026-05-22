@@ -13,7 +13,11 @@ import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.service.ObjectDefinitionLocalService;
 import com.liferay.object.service.ObjectEntryLocalService;
 import com.liferay.portal.configuration.test.util.ConfigurationTestUtil;
+import com.liferay.portal.kernel.audit.AuditMessage;
+import com.liferay.portal.kernel.audit.AuditRouter;
 import com.liferay.portal.kernel.dao.orm.QueryUtil;
+import com.liferay.portal.kernel.model.ModelListener;
+import com.liferay.portal.kernel.test.ReflectionTestUtil;
 import com.liferay.portal.kernel.test.rule.AggregateTestRule;
 import com.liferay.portal.kernel.test.util.RandomTestUtil;
 import com.liferay.portal.kernel.test.util.ServiceContextTestUtil;
@@ -23,6 +27,7 @@ import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.HashMapDictionaryBuilder;
 import com.liferay.portal.kernel.util.PortalUtil;
 import com.liferay.portal.kernel.util.PropsValues;
+import com.liferay.portal.kernel.util.ProxyUtil;
 import com.liferay.portal.test.rule.FeatureFlag;
 import com.liferay.portal.test.rule.FeatureFlags;
 import com.liferay.portal.test.rule.Inject;
@@ -38,8 +43,11 @@ import java.io.UnsupportedEncodingException;
 
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Queue;
 
 import org.hamcrest.CoreMatchers;
 
@@ -83,6 +91,30 @@ public class MCPServerDataMaskingTest {
 	@After
 	public void tearDown() throws Exception {
 		_updateMCPServerConfiguration(false);
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-86164"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testDataMaskAuditAddEventIsEmittedOnCreate() throws Exception {
+		Queue<AuditMessage> auditMessages = _captureFrameworkAuditMessages();
+
+		ObjectEntry dataMaskObjectEntry = null;
+
+		try {
+			dataMaskObjectEntry = _addCustomMask(
+				RandomTestUtil.randomString(), "abc", "[REDACTED]");
+
+			Assert.assertFalse(auditMessages.isEmpty());
+		}
+		finally {
+			_restoreFrameworkAuditRouter();
+
+			if (dataMaskObjectEntry != null) {
+				_objectEntryLocalService.deleteObjectEntry(dataMaskObjectEntry);
+			}
+		}
 	}
 
 	@FeatureFlags(
@@ -374,6 +406,26 @@ public class MCPServerDataMaskingTest {
 		}
 	}
 
+	private Queue<AuditMessage> _captureFrameworkAuditMessages() {
+		Queue<AuditMessage> auditMessages = new LinkedList<>();
+
+		_originalFrameworkAuditRouter =
+			(AuditRouter)ReflectionTestUtil.getAndSetFieldValue(
+				_objectEntryModelListener, "_auditRouter",
+				ProxyUtil.newProxyInstance(
+					AuditRouter.class.getClassLoader(),
+					new Class<?>[] {AuditRouter.class},
+					(proxy, method, arguments) -> {
+						if (Objects.equals(method.getName(), "route")) {
+							auditMessages.add((AuditMessage)arguments[0]);
+						}
+
+						return null;
+					}));
+
+		return auditMessages;
+	}
+
 	private int _countProfileDataMasks(long profileObjectEntryId)
 		throws Exception {
 
@@ -496,6 +548,16 @@ public class MCPServerDataMaskingTest {
 		).build();
 	}
 
+	private void _restoreFrameworkAuditRouter() {
+		if (_originalFrameworkAuditRouter != null) {
+			ReflectionTestUtil.setFieldValue(
+				_objectEntryModelListener, "_auditRouter",
+				_originalFrameworkAuditRouter);
+
+			_originalFrameworkAuditRouter = null;
+		}
+	}
+
 	private void _setProfileDataMaskInactive(
 			long profileObjectEntryId, long maskObjectEntryId)
 		throws Exception {
@@ -532,5 +594,12 @@ public class MCPServerDataMaskingTest {
 
 	@Inject
 	private ObjectEntryLocalService _objectEntryLocalService;
+
+	@Inject(
+		filter = "component.name=com.liferay.object.internal.model.listener.ObjectEntryModelListener"
+	)
+	private ModelListener<?> _objectEntryModelListener;
+
+	private AuditRouter _originalFrameworkAuditRouter;
 
 }
