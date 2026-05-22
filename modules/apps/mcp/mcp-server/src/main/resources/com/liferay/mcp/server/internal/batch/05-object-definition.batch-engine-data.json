@@ -15,6 +15,7 @@
 		{
 			"active": true,
 			"className": "com.liferay.object.model.ObjectDefinition#D7M9",
+			"enableObjectEntryHistory": true,
 			"externalReferenceCode": "L_MCP_SERVER_DATA_MASK",
 			"label": {
 				"en_US": "MCP Server Data Mask"
