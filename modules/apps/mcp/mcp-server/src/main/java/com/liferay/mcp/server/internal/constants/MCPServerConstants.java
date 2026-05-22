@@ -10,6 +10,10 @@ package com.liferay.mcp.server.internal.constants;
  */
 public class MCPServerConstants {
 
+	public static final String AUDIT_FEATURE_CONTEXT_MCP_SERVER = "MCP_SERVER";
+
+	public static final String EVENT_TYPE_MCP_REDACTION = "MCP_REDACTION";
+
 	public static final String EXTERNAL_REFERENCE_CODE_MCP_SERVER_DATA_MASK =
 		"L_MCP_SERVER_DATA_MASK";
 

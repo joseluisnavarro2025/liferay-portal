@@ -7,9 +7,11 @@ package com.liferay.mcp.server.internal.servlet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.liferay.mcp.server.internal.audit.MCPAuditEventEmitter;
 import com.liferay.mcp.server.internal.configuration.MCPServerConfiguration;
 import com.liferay.mcp.server.internal.constants.MCPServerConstants;
 import com.liferay.mcp.server.internal.datamasking.DataMaskingService;
+import com.liferay.mcp.server.internal.datamasking.RedactionResult;
 import com.liferay.mcp.server.internal.util.OpenAPIUtil;
 import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
@@ -19,6 +21,7 @@ import com.liferay.petra.function.transform.TransformUtil;
 import com.liferay.petra.string.StringBundler;
 import com.liferay.petra.string.StringPool;
 import com.liferay.portal.configuration.module.configuration.ConfigurationProvider;
+import com.liferay.portal.kernel.audit.AuditRouter;
 import com.liferay.portal.kernel.dao.orm.QueryUtil;
 import com.liferay.portal.kernel.feature.flag.FeatureFlagManagerUtil;
 import com.liferay.portal.kernel.json.JSONException;
@@ -26,8 +29,12 @@ import com.liferay.portal.kernel.json.JSONFactory;
 import com.liferay.portal.kernel.json.JSONObject;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
 import com.liferay.portal.kernel.module.configuration.ConfigurationException;
+import com.liferay.portal.kernel.service.UserLocalService;
+import com.liferay.portal.kernel.util.Base64;
 import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.Http;
 import com.liferay.portal.kernel.util.Portal;
@@ -165,6 +172,8 @@ public class MCPServerServlet extends HttpServlet {
 	protected void activate() {
 		_dataMaskingService = new DataMaskingService(
 			_objectDefinitionLocalService, _objectEntryLocalService);
+		_mcpAuditEventEmitter = new MCPAuditEventEmitter(
+			_auditRouter, _objectDefinitionLocalService, _userLocalService);
 	}
 
 	private Servlet _buildServlet(
@@ -182,6 +191,12 @@ public class MCPServerServlet extends HttpServlet {
 							"liferayAIHubCellOnBehalfOf",
 							request.getHeader(
 								"Liferay-AI-Hub-Cell-On-Behalf-Of")
+						).put(
+							"userAgent", request.getHeader("User-Agent")
+						).put(
+							"userId",
+							_resolveUserId(
+								companyId, request.getHeader("Authorization"))
 						).build())
 				).messageEndpoint(
 					(mcpServerProfile != null) ?
@@ -367,8 +382,17 @@ public class MCPServerServlet extends HttpServlet {
 
 			int responseCode = response.getResponseCode();
 
-			content = _dataMaskingService.redact(
+			RedactionResult redactionResult = _dataMaskingService.redact(
 				companyId, profileObjectEntryId, content);
+
+			content = redactionResult.getText();
+
+			_mcpAuditEventEmitter.emitRedactionEvent(
+				companyId,
+				GetterUtil.getLong(mcpTransportContext.get("userId")),
+				profileObjectEntryId, redactionResult, method,
+				liferayAIHubCellOnBehalfOf,
+				mcpTransportContext.get("userAgent"));
 
 			if (responseCode < 300) {
 				return McpSchema.CallToolResult.builder(
@@ -581,8 +605,48 @@ public class MCPServerServlet extends HttpServlet {
 		}
 	}
 
+	private long _resolveUserId(long companyId, String authorizationHeader) {
+		if (Validator.isNull(authorizationHeader) ||
+			!authorizationHeader.startsWith("Basic ")) {
+
+			return 0;
+		}
+
+		try {
+			String decoded = new String(
+				Base64.decode(authorizationHeader.substring(6)));
+
+			int index = decoded.indexOf(StringPool.COLON);
+
+			if (index < 0) {
+				return 0;
+			}
+
+			User user = _userLocalService.fetchUserByEmailAddress(
+				companyId, decoded.substring(0, index));
+
+			if (user == null) {
+				return 0;
+			}
+
+			return user.getUserId();
+		}
+		catch (Exception exception) {
+			if (_log.isDebugEnabled()) {
+				_log.debug(
+					"Unable to resolve user id from authorization header",
+					exception);
+			}
+
+			return 0;
+		}
+	}
+
 	private static final Log _log = LogFactoryUtil.getLog(
 		MCPServerServlet.class);
+
+	@Reference
+	private AuditRouter _auditRouter;
 
 	@Reference
 	private ConfigurationProvider _configurationProvider;
@@ -595,6 +659,8 @@ public class MCPServerServlet extends HttpServlet {
 	@Reference
 	private JSONFactory _jsonFactory;
 
+	private MCPAuditEventEmitter _mcpAuditEventEmitter;
+
 	@Reference
 	private ObjectDefinitionLocalService _objectDefinitionLocalService;
 
@@ -605,6 +671,9 @@ public class MCPServerServlet extends HttpServlet {
 	private Portal _portal;
 
 	private final Map<String, Servlet> _servlets = new ConcurrentHashMap<>();
+
+	@Reference
+	private UserLocalService _userLocalService;
 
 	private static class MCPServerProfile {
 

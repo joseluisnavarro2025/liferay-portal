@@ -14,24 +14,25 @@ import java.util.regex.Pattern;
 public class DataMask {
 
 	public DataMask(
-		String name, Pattern detectionPattern, Pattern replacementPattern,
-		String replacementValue) {
+		String externalReferenceCode, String name, Pattern detectionPattern,
+		Pattern replacementPattern, String replacementValue) {
 
+		_externalReferenceCode = externalReferenceCode;
 		_name = name;
 		_detectionPattern = detectionPattern;
 		_replacementPattern = replacementPattern;
 		_replacementValue = replacementValue;
 	}
 
-	public String apply(String text) {
+	public ApplyResult apply(String text) {
 		Matcher matcher = _detectionPattern.matcher(text);
 
 		StringBuilder sb = new StringBuilder();
 
-		boolean found = false;
+		int matchCount = 0;
 
 		while (matcher.find()) {
-			found = true;
+			matchCount++;
 
 			if (_replacementPattern == null) {
 				matcher.appendReplacement(sb, _replacementValue);
@@ -50,20 +51,45 @@ public class DataMask {
 			}
 		}
 
-		if (!found) {
-			return text;
+		if (matchCount == 0) {
+			return new ApplyResult(text, 0);
 		}
 
 		matcher.appendTail(sb);
 
-		return sb.toString();
+		return new ApplyResult(sb.toString(), matchCount);
+	}
+
+	public String getExternalReferenceCode() {
+		return _externalReferenceCode;
 	}
 
 	public String getName() {
 		return _name;
 	}
 
+	public static final class ApplyResult {
+
+		public ApplyResult(String text, int matchCount) {
+			_text = text;
+			_matchCount = matchCount;
+		}
+
+		public int getMatchCount() {
+			return _matchCount;
+		}
+
+		public String getText() {
+			return _text;
+		}
+
+		private final int _matchCount;
+		private final String _text;
+
+	}
+
 	private final Pattern _detectionPattern;
+	private final String _externalReferenceCode;
 	private final String _name;
 	private final Pattern _replacementPattern;
 	private final String _replacementValue;

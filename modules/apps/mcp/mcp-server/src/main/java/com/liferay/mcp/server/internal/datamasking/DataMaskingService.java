@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -42,27 +43,40 @@ public class DataMaskingService {
 		_objectEntryLocalService = objectEntryLocalService;
 	}
 
-	public String redact(
+	public RedactionResult redact(
 		long companyId, long profileObjectEntryId, String text) {
 
 		if (Validator.isNull(text) || (profileObjectEntryId == 0) ||
 			!FeatureFlagManagerUtil.isEnabled(companyId, "LPD-90204")) {
 
-			return text;
+			return new RedactionResult(text, Collections.emptyMap());
 		}
 
 		List<DataMask> dataMasks = _loadDataMasks(
 			companyId, profileObjectEntryId);
 
 		if (dataMasks.isEmpty()) {
-			return text;
+			return new RedactionResult(text, Collections.emptyMap());
 		}
 
 		String current = text;
 
+		Map<String, Integer> matchCountsByExternalReferenceCode =
+			new LinkedHashMap<>();
+
 		for (DataMask dataMask : dataMasks) {
 			try {
-				current = dataMask.apply(current);
+				DataMask.ApplyResult applyResult = dataMask.apply(current);
+
+				current = applyResult.getText();
+
+				int matchCount = applyResult.getMatchCount();
+
+				if (matchCount > 0) {
+					matchCountsByExternalReferenceCode.merge(
+						dataMask.getExternalReferenceCode(), matchCount,
+						Integer::sum);
+				}
 			}
 			catch (RuntimeException runtimeException) {
 				if (_log.isWarnEnabled()) {
@@ -75,7 +89,7 @@ public class DataMaskingService {
 			}
 		}
 
-		return current;
+		return new RedactionResult(current, matchCountsByExternalReferenceCode);
 	}
 
 	private ObjectDefinition _fetchObjectDefinition(
@@ -232,7 +246,8 @@ public class DataMaskingService {
 
 				dataMasks.add(
 					new DataMask(
-						name, detectionPattern, replacementPattern,
+						maskObjectEntry.getExternalReferenceCode(), name,
+						detectionPattern, replacementPattern,
 						replacementValue));
 			}
 			catch (PatternSyntaxException patternSyntaxException) {
