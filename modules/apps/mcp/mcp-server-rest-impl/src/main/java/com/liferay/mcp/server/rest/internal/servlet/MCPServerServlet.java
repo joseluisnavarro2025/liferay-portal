@@ -54,6 +54,7 @@ import java.io.Serializable;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -148,6 +149,9 @@ public class MCPServerServlet extends HttpServlet {
 
 		String mcpServerProfileName = (String)values.get("name");
 
+		long profileObjectEntryId =
+			mcpServerProfileObjectEntry.getObjectEntryId();
+
 		HttpServletStatelessServerTransport
 			httpServletStatelessServerTransport =
 				HttpServletStatelessServerTransport.builder(
@@ -180,7 +184,8 @@ public class MCPServerServlet extends HttpServlet {
 						_getTool(httpServletRequest, toolName, toolSetName),
 						(mcpTransportContext, callToolRequest) -> _call(
 							mcpTransportContext, callToolRequest.arguments(),
-							toolName, toolSetName));
+							companyId, profileObjectEntryId, toolName,
+							toolSetName));
 				});
 
 		McpStatelessSyncServer mcpStatelessSyncServer = McpServer.sync(
@@ -236,14 +241,17 @@ public class MCPServerServlet extends HttpServlet {
 
 	private McpSchema.CallToolResult _call(
 		McpTransportContext mcpTransportContext, Object inputObject,
-		String toolName, String toolSetName) {
+		long companyId, long profileObjectEntryId, String toolName,
+		String toolSetName) {
 
 		HttpServletRequest httpServletRequest =
 			(HttpServletRequest)mcpTransportContext.get("httpServletRequest");
 
 		try {
 			Response response = ToolSetUtil.invokeTool(
-				httpServletRequest, inputObject, toolName, toolSetName);
+				httpServletRequest, inputObject,
+				_resolveDataMaskERCs(companyId, profileObjectEntryId), toolName,
+				toolSetName);
 
 			int responseCode = response.getStatus();
 			String content = (String)response.getEntity();
@@ -443,6 +451,81 @@ public class MCPServerServlet extends HttpServlet {
 		catch (ConfigurationException configurationException) {
 			throw new RuntimeException(configurationException);
 		}
+	}
+
+	private List<String> _resolveDataMaskERCs(
+		long companyId, long profileObjectEntryId) {
+
+		ObjectDefinition profileDataMaskObjectDefinition =
+			_objectDefinitionLocalService.
+				fetchObjectDefinitionByExternalReferenceCode(
+					MCPServerConstants.
+						EXTERNAL_REFERENCE_CODE_MCP_SERVER_PROFILE_DATA_MASK,
+					companyId);
+
+		if (profileDataMaskObjectDefinition == null) {
+			return Collections.emptyList();
+		}
+
+		List<ObjectEntry> activeProfileDataMaskObjectEntries =
+			new ArrayList<>();
+
+		for (ObjectEntry profileDataMaskObjectEntry :
+				_objectEntryLocalService.getObjectEntries(
+					0, profileDataMaskObjectDefinition.getObjectDefinitionId(),
+					QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+
+			Map<String, Serializable> values =
+				profileDataMaskObjectEntry.getValues();
+
+			long profileId = GetterUtil.getLong(
+				values.get("r_profileToProfileDataMasks_mcpServerProfileId"));
+
+			if ((profileId != profileObjectEntryId) ||
+				!GetterUtil.getBoolean(values.get("active"), true)) {
+
+				continue;
+			}
+
+			activeProfileDataMaskObjectEntries.add(profileDataMaskObjectEntry);
+		}
+
+		activeProfileDataMaskObjectEntries.sort(
+			Comparator.comparing(
+				objectEntry -> GetterUtil.getInteger(
+					objectEntry.getValues(
+					).get(
+						"executionOrder"
+					),
+					Integer.MAX_VALUE)));
+
+		List<String> maskExternalReferenceCodes = new ArrayList<>();
+
+		for (ObjectEntry profileDataMaskObjectEntry :
+				activeProfileDataMaskObjectEntries) {
+
+			long maskObjectEntryId = GetterUtil.getLong(
+				profileDataMaskObjectEntry.getValues(
+				).get(
+					"r_dataMaskToProfileDataMasks_mcpServerDataMaskId"
+				));
+
+			ObjectEntry maskObjectEntry =
+				_objectEntryLocalService.fetchObjectEntry(maskObjectEntryId);
+
+			if (maskObjectEntry == null) {
+				continue;
+			}
+
+			String externalReferenceCode =
+				maskObjectEntry.getExternalReferenceCode();
+
+			if (Validator.isNotNull(externalReferenceCode)) {
+				maskExternalReferenceCodes.add(externalReferenceCode);
+			}
+		}
+
+		return maskExternalReferenceCodes;
 	}
 
 	private static final Log _log = LogFactoryUtil.getLog(

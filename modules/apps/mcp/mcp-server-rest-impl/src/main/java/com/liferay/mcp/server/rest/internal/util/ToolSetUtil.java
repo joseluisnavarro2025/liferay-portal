@@ -38,7 +38,9 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import jakarta.ws.rs.core.Response;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -101,7 +103,8 @@ public class ToolSetUtil {
 
 	public static Response invokeTool(
 			HttpServletRequest httpServletRequest, Object inputObject,
-			String toolName, String toolSetName)
+			List<String> maskExternalReferenceCodes, String toolName,
+			String toolSetName)
 		throws Exception {
 
 		JSONObject inputJSONObject = null;
@@ -140,6 +143,7 @@ public class ToolSetUtil {
 			if (Objects.equals(toolName, "invokeTool")) {
 				return invokeTool(
 					httpServletRequest, inputJSONObject.opt("body"),
+					maskExternalReferenceCodes,
 					inputJSONObject.getString("toolName"),
 					inputJSONObject.getString("toolSetName"));
 			}
@@ -147,6 +151,12 @@ public class ToolSetUtil {
 
 		Http.Options options = _getOptions(
 			httpServletRequest, inputJSONObject, toolName, toolSetName);
+
+		if (!maskExternalReferenceCodes.isEmpty()) {
+			options.addHeader(
+				"X-Liferay-Data-Masks",
+				StringUtil.merge(maskExternalReferenceCodes, ","));
+		}
 
 		String content = _getContent(HttpUtil.URLtoString(options));
 
@@ -159,6 +169,16 @@ public class ToolSetUtil {
 		).type(
 			ContentTypes.TEXT_PLAIN_UTF8
 		).build();
+	}
+
+	public static Response invokeTool(
+			HttpServletRequest httpServletRequest, Object inputObject,
+			String toolName, String toolSetName)
+		throws Exception {
+
+		return invokeTool(
+			httpServletRequest, inputObject, Collections.emptyList(), toolName,
+			toolSetName);
 	}
 
 	private static String _get(
