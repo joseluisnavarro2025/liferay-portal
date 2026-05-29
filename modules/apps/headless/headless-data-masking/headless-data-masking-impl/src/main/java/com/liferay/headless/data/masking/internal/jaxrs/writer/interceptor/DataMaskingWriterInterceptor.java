@@ -5,9 +5,7 @@
 
 package com.liferay.headless.data.masking.internal.jaxrs.writer.interceptor;
 
-import com.liferay.headless.data.masking.internal.masking.DataMaskingEngine;
-import com.liferay.object.service.ObjectDefinitionLocalService;
-import com.liferay.object.service.ObjectEntryLocalService;
+import com.liferay.headless.data.masking.service.v1_0.DataMaskingService;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.util.Portal;
@@ -31,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ServiceScope;
@@ -82,7 +79,7 @@ public class DataMaskingWriterInterceptor implements WriterInterceptor {
 
 			String body = byteArrayOutputStream.toString(charset);
 
-			String redacted = _dataMaskingEngine.redact(
+			String redacted = _dataMaskingService.redact(
 				companyId, maskExternalReferenceCodes, body);
 
 			originalOutputStream.write(redacted.getBytes(charset));
@@ -90,12 +87,6 @@ public class DataMaskingWriterInterceptor implements WriterInterceptor {
 		finally {
 			writerInterceptorContext.setOutputStream(originalOutputStream);
 		}
-	}
-
-	@Activate
-	protected void activate() {
-		_dataMaskingEngine = new DataMaskingEngine(
-			_objectDefinitionLocalService, _objectEntryLocalService);
 	}
 
 	private boolean _isRedactableMediaType(MediaType mediaType) {
@@ -161,16 +152,11 @@ public class DataMaskingWriterInterceptor implements WriterInterceptor {
 	private static final Log _log = LogFactoryUtil.getLog(
 		DataMaskingWriterInterceptor.class);
 
-	private DataMaskingEngine _dataMaskingEngine;
+	@Reference
+	private DataMaskingService _dataMaskingService;
 
 	@Context
 	private HttpServletRequest _httpServletRequest;
-
-	@Reference
-	private ObjectDefinitionLocalService _objectDefinitionLocalService;
-
-	@Reference
-	private ObjectEntryLocalService _objectEntryLocalService;
 
 	@Reference
 	private Portal _portal;
