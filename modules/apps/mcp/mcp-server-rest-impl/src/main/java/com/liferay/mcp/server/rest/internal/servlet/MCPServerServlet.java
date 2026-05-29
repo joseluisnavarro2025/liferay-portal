@@ -7,6 +7,7 @@ package com.liferay.mcp.server.rest.internal.servlet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.liferay.headless.data.masking.service.v1_0.DataMaskingService;
 import com.liferay.mcp.server.rest.dto.v1_0.Tool;
 import com.liferay.mcp.server.rest.internal.configuration.MCPServerConfiguration;
 import com.liferay.mcp.server.rest.internal.constants.MCPServerConstants;
@@ -248,10 +249,12 @@ public class MCPServerServlet extends HttpServlet {
 			(HttpServletRequest)mcpTransportContext.get("httpServletRequest");
 
 		try {
+			List<String> maskExternalReferenceCodes = _resolveDataMaskERCs(
+				companyId, profileObjectEntryId);
+
 			Response response = ToolSetUtil.invokeTool(
-				httpServletRequest, inputObject,
-				_resolveDataMaskERCs(companyId, profileObjectEntryId), toolName,
-				toolSetName);
+				httpServletRequest, inputObject, maskExternalReferenceCodes,
+				toolName, toolSetName);
 
 			int responseCode = response.getStatus();
 			String content = (String)response.getEntity();
@@ -259,6 +262,10 @@ public class MCPServerServlet extends HttpServlet {
 			if (responseCode < 300) {
 				if (content == null) {
 					content = "Status code: " + responseCode;
+				}
+				else {
+					content = _dataMaskingService.redact(
+						companyId, maskExternalReferenceCodes, content);
 				}
 
 				return McpSchema.CallToolResult.builder(
@@ -479,7 +486,7 @@ public class MCPServerServlet extends HttpServlet {
 				profileDataMaskObjectEntry.getValues();
 
 			long profileId = GetterUtil.getLong(
-				values.get("r_profileToProfileDataMasks_mcpServerProfileId"));
+				values.get("mcpServerProfileId"));
 
 			if ((profileId != profileObjectEntryId) ||
 				!GetterUtil.getBoolean(values.get("active"), true)) {
@@ -535,6 +542,9 @@ public class MCPServerServlet extends HttpServlet {
 
 	@Reference
 	private ConfigurationProvider _configurationProvider;
+
+	@Reference
+	private DataMaskingService _dataMaskingService;
 
 	@Reference
 	private ObjectDefinitionLocalService _objectDefinitionLocalService;

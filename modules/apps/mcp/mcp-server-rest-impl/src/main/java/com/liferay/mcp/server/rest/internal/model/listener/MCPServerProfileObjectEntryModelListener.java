@@ -71,6 +71,13 @@ public class MCPServerProfileObjectEntryModelListener
 		_invalidateServlet(objectEntry, _getName(originalObjectEntry));
 	}
 
+	@Override
+	public void onBeforeRemove(ObjectEntry objectEntry)
+		throws ModelListenerException {
+
+		_deleteProfileDataMasks(objectEntry);
+	}
+
 	private void _attachSystemMasks(ObjectEntry profileObjectEntry) {
 		long companyId = profileObjectEntry.getCompanyId();
 
@@ -121,11 +128,11 @@ public class MCPServerProfileObjectEntryModelListener
 					).put(
 						"executionOrder", executionOrder
 					).put(
+						"mcpServerProfileId",
+						profileObjectEntry.getObjectEntryId()
+					).put(
 						"r_dataMaskToProfileDataMasks_mcpServerDataMaskId",
 						maskObjectEntry.getObjectEntryId()
-					).put(
-						"r_profileToProfileDataMasks_mcpServerProfileId",
-						profileObjectEntry.getObjectEntryId()
 					).build(),
 					new ServiceContext());
 
@@ -138,6 +145,52 @@ public class MCPServerProfileObjectEntryModelListener
 							"Unable to attach system mask \"",
 							maskValues.get("name"), "\" to profile ",
 							profileObjectEntry.getObjectEntryId()),
+						portalException);
+				}
+			}
+		}
+	}
+
+	private void _deleteProfileDataMasks(ObjectEntry profileObjectEntry) {
+		ObjectDefinition profileDataMaskObjectDefinition =
+			_objectDefinitionLocalService.
+				fetchObjectDefinitionByExternalReferenceCode(
+					MCPServerConstants.
+						EXTERNAL_REFERENCE_CODE_MCP_SERVER_PROFILE_DATA_MASK,
+					profileObjectEntry.getCompanyId());
+
+		if (profileDataMaskObjectDefinition == null) {
+			return;
+		}
+
+		long profileObjectEntryId = profileObjectEntry.getObjectEntryId();
+
+		for (ObjectEntry profileDataMaskObjectEntry :
+				_objectEntryLocalService.getObjectEntries(
+					0, profileDataMaskObjectDefinition.getObjectDefinitionId(),
+					QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+
+			Map<String, Serializable> values =
+				profileDataMaskObjectEntry.getValues();
+
+			long profileId = GetterUtil.getLong(
+				values.get("mcpServerProfileId"));
+
+			if (profileId != profileObjectEntryId) {
+				continue;
+			}
+
+			try {
+				_objectEntryLocalService.deleteObjectEntry(
+					profileDataMaskObjectEntry.getObjectEntryId());
+			}
+			catch (PortalException portalException) {
+				if (_log.isWarnEnabled()) {
+					_log.warn(
+						StringBundler.concat(
+							"Unable to delete profile data mask ",
+							profileDataMaskObjectEntry.getObjectEntryId(),
+							" for profile ", profileObjectEntryId),
 						portalException);
 				}
 			}

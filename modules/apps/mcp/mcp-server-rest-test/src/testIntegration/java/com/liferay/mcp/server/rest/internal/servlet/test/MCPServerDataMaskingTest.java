@@ -564,7 +564,7 @@ public class MCPServerDataMaskingTest {
 				"r_dataMaskToProfileDataMasks_mcpServerDataMaskId",
 				maskObjectEntryId
 			).put(
-				"r_profileToProfileDataMasks_mcpServerProfileId",
+				"mcpServerProfileId",
 				profileObjectEntryId
 			).build(),
 			ServiceContextTestUtil.getServiceContext());
@@ -612,7 +612,7 @@ public class MCPServerDataMaskingTest {
 				profileDataMaskObjectEntry.getValues();
 
 			long relationshipProfileId = GetterUtil.getLong(
-				values.get("r_profileToProfileDataMasks_mcpServerProfileId"));
+				values.get("mcpServerProfileId"));
 
 			if (relationshipProfileId == profileObjectEntryId) {
 				count++;
@@ -666,7 +666,7 @@ public class MCPServerDataMaskingTest {
 				profileDataMaskObjectEntry.getValues();
 
 			long profileId = GetterUtil.getLong(
-				values.get("r_profileToProfileDataMasks_mcpServerProfileId"));
+				values.get("mcpServerProfileId"));
 			long maskId = GetterUtil.getLong(
 				values.get("r_dataMaskToProfileDataMasks_mcpServerDataMaskId"));
 
@@ -784,7 +784,7 @@ public class MCPServerDataMaskingTest {
 		throws Exception {
 
 		ConfigurationTestUtil.createFactoryConfiguration(
-			"com.liferay.mcp.server.internal.configuration." +
+			"com.liferay.mcp.server.rest.internal.configuration." +
 				"MCPServerConfiguration.scoped",
 			HashMapDictionaryBuilder.<String, Object>put(
 				"companyId", TestPropsValues.getCompanyId()
