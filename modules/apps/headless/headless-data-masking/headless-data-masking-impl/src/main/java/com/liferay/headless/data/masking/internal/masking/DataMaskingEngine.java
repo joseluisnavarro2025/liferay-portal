@@ -5,6 +5,7 @@
 
 package com.liferay.headless.data.masking.internal.masking;
 
+import com.liferay.headless.data.masking.service.v1_0.DataMaskingService;
 import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.service.ObjectDefinitionLocalService;
@@ -24,19 +25,16 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
 /**
  * @author Jose Luis Navarro
  */
-public class DataMaskingEngine {
+@Component(service = DataMaskingService.class)
+public class DataMaskingEngine implements DataMaskingService {
 
-	public DataMaskingEngine(
-		ObjectDefinitionLocalService objectDefinitionLocalService,
-		ObjectEntryLocalService objectEntryLocalService) {
-
-		_objectDefinitionLocalService = objectDefinitionLocalService;
-		_objectEntryLocalService = objectEntryLocalService;
-	}
-
+	@Override
 	public String redact(
 		long companyId, List<String> maskExternalReferenceCodes, String text) {
 
@@ -159,7 +157,10 @@ public class DataMaskingEngine {
 	private static final Log _log = LogFactoryUtil.getLog(
 		DataMaskingEngine.class);
 
-	private final ObjectDefinitionLocalService _objectDefinitionLocalService;
-	private final ObjectEntryLocalService _objectEntryLocalService;
+	@Reference
+	private ObjectDefinitionLocalService _objectDefinitionLocalService;
+
+	@Reference
+	private ObjectEntryLocalService _objectEntryLocalService;
 
 }
