@@ -13,10 +13,6 @@ public class MCPServerConstants {
 	public static final String EXTERNAL_REFERENCE_CODE_MCP_SERVER_DATA_MASK =
 		"L_MCP_SERVER_DATA_MASK";
 
-	public static final String
-		EXTERNAL_REFERENCE_CODE_MCP_SERVER_DEFAULT_PROFILE =
-			"L_MCP_SERVER_DEFAULT_PROFILE";
-
 	public static final String EXTERNAL_REFERENCE_CODE_MCP_SERVER_PROFILE =
 		"L_MCP_SERVER_PROFILE";
 
