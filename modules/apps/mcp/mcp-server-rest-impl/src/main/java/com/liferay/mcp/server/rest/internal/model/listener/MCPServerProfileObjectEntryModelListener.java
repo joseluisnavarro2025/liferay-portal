@@ -72,19 +72,6 @@ public class MCPServerProfileObjectEntryModelListener
 	}
 
 	private void _attachSystemMasks(ObjectEntry profileObjectEntry) {
-
-		// The Default profile's joins ship via the 07-object-entry seed with
-		// their own ERCs. Skipping it here keeps the listener from racing the
-		// seed and inserting duplicates.
-
-		if (Objects.equals(
-				profileObjectEntry.getExternalReferenceCode(),
-				MCPServerConstants.
-					EXTERNAL_REFERENCE_CODE_MCP_SERVER_DEFAULT_PROFILE)) {
-
-			return;
-		}
-
 		long companyId = profileObjectEntry.getCompanyId();
 
 		ObjectDefinition maskObjectDefinition =
