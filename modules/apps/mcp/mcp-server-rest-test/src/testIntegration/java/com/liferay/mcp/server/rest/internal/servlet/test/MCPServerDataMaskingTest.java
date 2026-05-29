@@ -95,6 +95,71 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
+	public void testAllSystemMasksAreAppliedInProfileResponse()
+		throws Exception {
+
+		String profileName = RandomTestUtil.randomString();
+
+		_addProfile(
+			profileName,
+			StringBundler.concat(
+				"Credit card: ", _SAMPLE_CREDIT_CARD, ". Email: ",
+				_SAMPLE_EMAIL_ALT, ". IBAN: ", _SAMPLE_IBAN, ". IPv4: ",
+				_SAMPLE_IPV4, ". IPv6: ", _SAMPLE_IPV6, ". BSN: ", _SAMPLE_BSN,
+				". DNI: ", _SAMPLE_DNI, ". SSN: ", _SAMPLE_SSN, ". Phone: ",
+				_SAMPLE_PHONE_INTL, "."),
+			"mcp-server-profiles getMCPServerProfilesPage");
+
+		String responseText = _callListProfilesTool(profileName);
+
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[BANK_ACCOUNT_NUMBER]"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[CREDIT_CARD_NUMBER]"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[EMAIL_ADDRESS]"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[NATIONAL_ID]"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[PHONE_NUMBER]"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("192.168.1.0/24"));
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("2001:0db8:85a3::/48"));
+
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_BSN)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_CREDIT_CARD)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_DNI)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_EMAIL_ALT)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_IBAN)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_IPV4)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_IPV6)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_PHONE_INTL)));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_SSN)));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
 	public void testEmailIsNotRedactedWhenAssociationIsInactive()
 		throws Exception {
 
@@ -561,11 +626,10 @@ public class MCPServerDataMaskingTest {
 			).put(
 				"executionOrder", executionOrder
 			).put(
+				"mcpServerProfileId", profileObjectEntryId
+			).put(
 				"r_dataMaskToProfileDataMasks_mcpServerDataMaskId",
 				maskObjectEntryId
-			).put(
-				"mcpServerProfileId",
-				profileObjectEntryId
 			).build(),
 			ServiceContextTestUtil.getServiceContext());
 	}
@@ -793,9 +857,28 @@ public class MCPServerDataMaskingTest {
 			).build());
 	}
 
+	private static final String _SAMPLE_BSN = "123456789";
+
+	private static final String _SAMPLE_CREDIT_CARD = "4111-1111-1111-1111";
+
+	private static final String _SAMPLE_DNI = "12345678A";
+
 	private static final String _SAMPLE_EMAIL = "contact@example.com";
 
+	private static final String _SAMPLE_EMAIL_ALT = "alice@example.com";
+
+	private static final String _SAMPLE_IBAN = "DE89370400440532013000";
+
+	private static final String _SAMPLE_IPV4 = "192.168.1.42";
+
+	private static final String _SAMPLE_IPV6 =
+		"2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+
 	private static final String _SAMPLE_PHONE = "+1-202-555-0199";
+
+	private static final String _SAMPLE_PHONE_INTL = "+34-600-123-456";
+
+	private static final String _SAMPLE_SSN = "123-45-6789";
 
 	private static final int _SYSTEM_MASK_COUNT = 9;
 
