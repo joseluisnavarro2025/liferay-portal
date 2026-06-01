@@ -245,6 +245,45 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
+	public void testErrorResponseIsRedacted() throws Exception {
+		String profileName = RandomTestUtil.randomString();
+
+		ObjectEntry profileObjectEntry = _addProfile(
+			profileName, RandomTestUtil.randomString(),
+			"mcp-server-profiles getMCPServerProfilesPage");
+
+		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email Address");
+
+		_addProfileDataMask(
+			profileObjectEntry.getObjectEntryId(),
+			emailMaskObjectEntry.getObjectEntryId(), true, 1);
+
+		McpSchema.CallToolResult callToolResult = _callTool(
+			profileName, "getMCPServerProfilesPage",
+			HashMapBuilder.<String, Object>put(
+				"filter", _SAMPLE_EMAIL
+			).build());
+
+		McpSchema.TextContent textContent =
+			(McpSchema.TextContent)callToolResult.content(
+			).get(
+				0
+			);
+
+		String responseText = textContent.text();
+
+		Assert.assertTrue(responseText, callToolResult.isError());
+		Assert.assertThat(
+			responseText, CoreMatchers.containsString("[EMAIL_ADDRESS]"));
+		Assert.assertThat(
+			responseText,
+			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_EMAIL)));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
 	public void testMasksAreAppliedInExecutionOrder() throws Exception {
 		String profileName = RandomTestUtil.randomString();
 
@@ -650,6 +689,23 @@ public class MCPServerDataMaskingTest {
 				0);
 
 			return content.text();
+		}
+		finally {
+			mcpSyncClient.closeGracefully();
+		}
+	}
+
+	private McpSchema.CallToolResult _callTool(
+			String profileName, String toolName, Map<String, Object> arguments)
+		throws Exception {
+
+		McpSyncClient mcpSyncClient = _getMcpSyncClient(profileName);
+
+		try {
+			mcpSyncClient.initialize();
+
+			return mcpSyncClient.callTool(
+				new McpSchema.CallToolRequest(toolName, arguments));
 		}
 		finally {
 			mcpSyncClient.closeGracefully();
