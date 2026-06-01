@@ -7,6 +7,7 @@ package com.liferay.mcp.server.rest.internal.servlet.test;
 
 import com.liferay.arquillian.extension.junit.bridge.junit.Arquillian;
 import com.liferay.batch.engine.test.util.BatchEngineTestUtil;
+import com.liferay.headless.data.masking.service.v1_0.DataMaskingService;
 import com.liferay.object.constants.ObjectEntryFolderConstants;
 import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
@@ -41,6 +42,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -436,6 +438,59 @@ public class MCPServerDataMaskingTest {
 		Assert.assertThat(
 			responseText,
 			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_EMAIL)));
+	}
+
+	@FeatureFlags(featureFlags = @FeatureFlag("LPD-90204"))
+	@Test
+	public void testRedactionLatencyIsUnder50Milliseconds() throws Exception {
+		long companyId = TestPropsValues.getCompanyId();
+
+		List<String> maskExternalReferenceCodes = Arrays.asList(
+			"L_MCP_SERVER_DATA_MASK_CREDIT_CARD_NUMBER",
+			"L_MCP_SERVER_DATA_MASK_EMAIL_ADDRESS",
+			"L_MCP_SERVER_DATA_MASK_IBAN", "L_MCP_SERVER_DATA_MASK_IPV4",
+			"L_MCP_SERVER_DATA_MASK_IPV6",
+			"L_MCP_SERVER_DATA_MASK_NATIONAL_ID_BSN",
+			"L_MCP_SERVER_DATA_MASK_NATIONAL_ID_DNI_NIF",
+			"L_MCP_SERVER_DATA_MASK_NATIONAL_ID_SSN",
+			"L_MCP_SERVER_DATA_MASK_PHONE_NUMBER");
+
+		StringBundler sb = new StringBundler();
+
+		for (int i = 0; i < 20; i++) {
+			sb.append(
+				StringBundler.concat(
+					"Record ", i, ": email ", _SAMPLE_EMAIL, ", phone ",
+					_SAMPLE_PHONE_INTL, ", IBAN ", _SAMPLE_IBAN, ", card ",
+					_SAMPLE_CREDIT_CARD, ", SSN ", _SAMPLE_SSN, ", IPv4 ",
+					_SAMPLE_IPV4, ", IPv6 ", _SAMPLE_IPV6, ". "));
+		}
+
+		String payload = sb.toString();
+
+		for (int i = 0; i < 5; i++) {
+			_dataMaskingService.redact(
+				companyId, maskExternalReferenceCodes, payload);
+		}
+
+		int iterations = 50;
+
+		long startTime = System.nanoTime();
+
+		for (int i = 0; i < iterations; i++) {
+			_dataMaskingService.redact(
+				companyId, maskExternalReferenceCodes, payload);
+		}
+
+		double averageMilliseconds =
+			(System.nanoTime() - startTime) / (iterations * 1000000.0);
+
+		Assert.assertTrue(
+			StringBundler.concat(
+				"Redaction averaged ", averageMilliseconds,
+				" ms per call over ", iterations, " iterations on a ",
+				payload.length(), "-character payload (target < 50 ms)"),
+			averageMilliseconds < 50);
 	}
 
 	@FeatureFlags(
@@ -937,6 +992,9 @@ public class MCPServerDataMaskingTest {
 	private static final String _SAMPLE_SSN = "123-45-6789";
 
 	private static final int _SYSTEM_MASK_COUNT = 9;
+
+	@Inject
+	private DataMaskingService _dataMaskingService;
 
 	@Inject
 	private Http _http;
