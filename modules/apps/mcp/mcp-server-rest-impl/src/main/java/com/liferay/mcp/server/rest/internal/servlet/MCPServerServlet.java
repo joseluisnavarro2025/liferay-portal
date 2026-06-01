@@ -257,15 +257,17 @@ public class MCPServerServlet extends HttpServlet {
 				toolName, toolSetName);
 
 			int responseCode = response.getStatus();
+
 			String content = (String)response.getEntity();
+
+			if (content != null) {
+				content = _dataMaskingService.redact(
+					companyId, maskExternalReferenceCodes, content);
+			}
 
 			if (responseCode < 300) {
 				if (content == null) {
 					content = "Status code: " + responseCode;
-				}
-				else {
-					content = _dataMaskingService.redact(
-						companyId, maskExternalReferenceCodes, content);
 				}
 
 				return McpSchema.CallToolResult.builder(
