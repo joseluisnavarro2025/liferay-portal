@@ -7,6 +7,7 @@ package com.liferay.mcp.server.rest.internal.servlet.test;
 
 import com.liferay.arquillian.extension.junit.bridge.junit.Arquillian;
 import com.liferay.batch.engine.test.util.BatchEngineTestUtil;
+import com.liferay.batch.engine.thread.local.BatchEngineThreadLocal;
 import com.liferay.headless.data.masking.service.v1_0.DataMaskingService;
 import com.liferay.object.constants.ObjectEntryFolderConstants;
 import com.liferay.object.model.ObjectDefinition;
@@ -162,7 +163,83 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
-	public void testEmailIsNotRedactedWhenAssociationIsInactive()
+	public void testCustomMaskCanBeDeletedWhileAttachedToProfile()
+		throws Exception {
+
+		ObjectEntry profileObjectEntry = _addProfile(
+			RandomTestUtil.randomString(), "no PII here",
+			"mcp-server-profiles getMCPServerProfilesPage");
+
+		ObjectEntry customMaskObjectEntry = _addCustomMask(
+			RandomTestUtil.randomString(), "\\d{4}", "[REDACTED]");
+
+		ObjectEntry profileDataMaskObjectEntry = _addProfileDataMask(
+			profileObjectEntry.getObjectEntryId(),
+			customMaskObjectEntry.getObjectEntryId(), 1);
+
+		PermissionChecker originalPermissionChecker =
+			PermissionThreadLocal.getPermissionChecker();
+
+		try {
+			PermissionThreadLocal.setPermissionChecker(
+				PermissionCheckerFactoryUtil.create(TestPropsValues.getUser()));
+
+			_objectEntryLocalService.deleteObjectEntry(
+				customMaskObjectEntry.getObjectEntryId());
+		}
+		finally {
+			PermissionThreadLocal.setPermissionChecker(
+				originalPermissionChecker);
+		}
+
+		Assert.assertNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				customMaskObjectEntry.getObjectEntryId()));
+
+		Assert.assertNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				profileDataMaskObjectEntry.getObjectEntryId()));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testCustomMaskCanBeUpdatedAndDeleted() throws Exception {
+		ObjectEntry customMaskObjectEntry = _addCustomMask(
+			RandomTestUtil.randomString(), "\\d{4}", "[REDACTED]");
+
+		ObjectEntry updatedObjectEntry =
+			_objectEntryLocalService.updateObjectEntry(
+				TestPropsValues.getUserId(),
+				customMaskObjectEntry.getObjectEntryId(), 0,
+				HashMapBuilder.<String, Serializable>putAll(
+					customMaskObjectEntry.getValues()
+				).put(
+					"replacementValue", "[CUSTOM]"
+				).build(),
+				ServiceContextTestUtil.getServiceContext());
+
+		Assert.assertEquals(
+			"[CUSTOM]",
+			updatedObjectEntry.getValues(
+			).get(
+				"replacementValue"
+			));
+
+		_objectEntryLocalService.deleteObjectEntry(
+			customMaskObjectEntry.getObjectEntryId());
+
+		Assert.assertNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				customMaskObjectEntry.getObjectEntryId()));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testEmailIsNotRedactedWhenAssociationIsRemoved()
 		throws Exception {
 
 		String profileName = RandomTestUtil.randomString();
@@ -177,7 +254,8 @@ public class MCPServerDataMaskingTest {
 			profileObjectEntry.getObjectEntryId(),
 			emailMaskObjectEntry.getObjectEntryId());
 
-		_setActive(emailProfileDataMaskObjectEntry, false, "Disabled by test.");
+		_removeProfileDataMask(
+			emailProfileDataMaskObjectEntry, "Removed by test.");
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -206,7 +284,7 @@ public class MCPServerDataMaskingTest {
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 1);
+			emailMaskObjectEntry.getObjectEntryId(), 1);
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -232,7 +310,7 @@ public class MCPServerDataMaskingTest {
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 1);
+			emailMaskObjectEntry.getObjectEntryId(), 1);
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -258,7 +336,7 @@ public class MCPServerDataMaskingTest {
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 1);
+			emailMaskObjectEntry.getObjectEntryId(), 1);
 
 		McpSchema.CallToolResult callToolResult = _callTool(
 			profileName, "getMCPServerProfilesPage",
@@ -300,10 +378,10 @@ public class MCPServerDataMaskingTest {
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			domainMaskObjectEntry.getObjectEntryId(), true, 1);
+			domainMaskObjectEntry.getObjectEntryId(), 1);
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 2);
+			emailMaskObjectEntry.getObjectEntryId(), 2);
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -318,7 +396,7 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
-	public void testProfileDataMaskCannotBeDeactivatedWithoutReason()
+	public void testProfileDataMaskCannotBeRemovedWithoutDeleteReason()
 		throws Exception {
 
 		ObjectEntry profileObjectEntry = _addProfile(
@@ -329,48 +407,32 @@ public class MCPServerDataMaskingTest {
 
 		ObjectEntry profileDataMaskObjectEntry = _addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 1);
+			emailMaskObjectEntry.getObjectEntryId(), 1);
 
 		try {
-			_setActive(profileDataMaskObjectEntry, false, null);
+			_objectEntryLocalService.deleteObjectEntry(
+				profileDataMaskObjectEntry.getObjectEntryId());
 
 			Assert.fail(
-				"Deactivating a profile data mask without a disable reason " +
-					"should have thrown");
+				"Removing a profile data mask without a delete reason should " +
+					"have thrown");
 		}
 		catch (Exception exception) {
 			Assert.assertThat(
 				exception.getMessage(),
-				CoreMatchers.containsString("disable reason"));
+				CoreMatchers.containsString("delete reason"));
 		}
 
-		ObjectEntry refreshedObjectEntry =
-			_objectEntryLocalService.getObjectEntry(
-				profileDataMaskObjectEntry.getObjectEntryId());
+		Assert.assertNotNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				profileDataMaskObjectEntry.getObjectEntryId()));
 
-		Assert.assertTrue(
-			GetterUtil.getBoolean(
-				refreshedObjectEntry.getValues(
-				).get(
-					"active"
-				)));
+		_removeProfileDataMask(
+			profileDataMaskObjectEntry, "Not required for this profile.");
 
-		ObjectEntry updatedObjectEntry = _setActive(
-			profileDataMaskObjectEntry, false,
-			"Not required for this profile.");
-
-		Assert.assertFalse(
-			GetterUtil.getBoolean(
-				updatedObjectEntry.getValues(
-				).get(
-					"active"
-				)));
-		Assert.assertEquals(
-			"Not required for this profile.",
-			updatedObjectEntry.getValues(
-			).get(
-				"disableReason"
-			));
+		Assert.assertNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				profileDataMaskObjectEntry.getObjectEntryId()));
 	}
 
 	@FeatureFlags(
@@ -426,10 +488,10 @@ public class MCPServerDataMaskingTest {
 
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			badMaskObjectEntry.getObjectEntryId(), true, 1);
+			badMaskObjectEntry.getObjectEntryId(), 1);
 		_addProfileDataMask(
 			profileObjectEntry.getObjectEntryId(),
-			emailMaskObjectEntry.getObjectEntryId(), true, 2);
+			emailMaskObjectEntry.getObjectEntryId(), 2);
 
 		String responseText = _callListProfilesTool(profileName);
 
@@ -589,13 +651,81 @@ public class MCPServerDataMaskingTest {
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
 	@Test
-	public void testSystemMaskCannotBeDeactivated() throws Exception {
+	public void testSystemMaskCanBeUpdatedBySeed() throws Exception {
+		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email Address");
+
+		BatchEngineThreadLocal.setBatchImportInProcess(true);
+
+		try {
+			_objectEntryLocalService.updateObjectEntry(
+				TestPropsValues.getUserId(),
+				emailMaskObjectEntry.getObjectEntryId(), 0,
+				HashMapBuilder.<String, Serializable>putAll(
+					emailMaskObjectEntry.getValues()
+				).put(
+					"replacementValue", "[EMAIL]"
+				).build(),
+				ServiceContextTestUtil.getServiceContext());
+		}
+		finally {
+			BatchEngineThreadLocal.setBatchImportInProcess(false);
+		}
+
+		ObjectEntry refreshedObjectEntry =
+			_objectEntryLocalService.getObjectEntry(
+				emailMaskObjectEntry.getObjectEntryId());
+
+		Assert.assertEquals(
+			"[EMAIL]",
+			refreshedObjectEntry.getValues(
+			).get(
+				"replacementValue"
+			));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testSystemMaskCannotBeDeleted() throws Exception {
 		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email Address");
 
 		try {
-			_setActive(emailMaskObjectEntry, false, null);
+			_objectEntryLocalService.deleteObjectEntry(
+				emailMaskObjectEntry.getObjectEntryId());
 
-			Assert.fail("Deactivating a system data mask should have thrown");
+			Assert.fail("Deleting a system data mask should have thrown");
+		}
+		catch (Exception exception) {
+			Assert.assertThat(
+				exception.getMessage(),
+				CoreMatchers.containsString("System data masks"));
+		}
+
+		Assert.assertNotNull(
+			_objectEntryLocalService.fetchObjectEntry(
+				emailMaskObjectEntry.getObjectEntryId()));
+	}
+
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testSystemMaskCannotBeUpdated() throws Exception {
+		ObjectEntry emailMaskObjectEntry = _findSystemMask("Email Address");
+
+		try {
+			_objectEntryLocalService.updateObjectEntry(
+				TestPropsValues.getUserId(),
+				emailMaskObjectEntry.getObjectEntryId(), 0,
+				HashMapBuilder.<String, Serializable>putAll(
+					emailMaskObjectEntry.getValues()
+				).put(
+					"replacementValue", "[CHANGED]"
+				).build(),
+				ServiceContextTestUtil.getServiceContext());
+
+			Assert.fail("Updating a system data mask should have thrown");
 		}
 		catch (Exception exception) {
 			Assert.assertThat(
@@ -607,12 +737,12 @@ public class MCPServerDataMaskingTest {
 			_objectEntryLocalService.getObjectEntry(
 				emailMaskObjectEntry.getObjectEntryId());
 
-		Assert.assertTrue(
-			GetterUtil.getBoolean(
-				refreshedObjectEntry.getValues(
-				).get(
-					"active"
-				)));
+		Assert.assertEquals(
+			"[EMAIL_ADDRESS]",
+			refreshedObjectEntry.getValues(
+			).get(
+				"replacementValue"
+			));
 	}
 
 	@FeatureFlags(
@@ -660,8 +790,6 @@ public class MCPServerDataMaskingTest {
 			ObjectEntryFolderConstants.PARENT_OBJECT_ENTRY_FOLDER_ID_DEFAULT,
 			null,
 			HashMapBuilder.<String, Serializable>put(
-				"active", true
-			).put(
 				"detectionRegex", detectionRegex
 			).put(
 				"maskType", "custom"
@@ -698,7 +826,7 @@ public class MCPServerDataMaskingTest {
 	}
 
 	private ObjectEntry _addProfileDataMask(
-			long profileObjectEntryId, long maskObjectEntryId, boolean active,
+			long profileObjectEntryId, long maskObjectEntryId,
 			int executionOrder)
 		throws Exception {
 
@@ -714,10 +842,6 @@ public class MCPServerDataMaskingTest {
 			ObjectEntryFolderConstants.PARENT_OBJECT_ENTRY_FOLDER_ID_DEFAULT,
 			null,
 			HashMapBuilder.<String, Serializable>put(
-				"active", active
-			).put(
-				"disableReason", active ? null : "Disabled by test."
-			).put(
 				"executionOrder", executionOrder
 			).put(
 				"mcpServerProfileId", profileObjectEntryId
@@ -939,20 +1063,21 @@ public class MCPServerDataMaskingTest {
 		return _http.URLtoString(options);
 	}
 
-	private ObjectEntry _setActive(
-			ObjectEntry objectEntry, boolean active, String disableReason)
+	private void _removeProfileDataMask(
+			ObjectEntry objectEntry, String deleteReason)
 		throws Exception {
 
-		return _objectEntryLocalService.updateObjectEntry(
+		_objectEntryLocalService.updateObjectEntry(
 			TestPropsValues.getUserId(), objectEntry.getObjectEntryId(), 0,
 			HashMapBuilder.<String, Serializable>putAll(
 				objectEntry.getValues()
 			).put(
-				"active", active
-			).put(
-				"disableReason", disableReason
+				"deleteReason", deleteReason
 			).build(),
 			ServiceContextTestUtil.getServiceContext());
+
+		_objectEntryLocalService.deleteObjectEntry(
+			objectEntry.getObjectEntryId());
 	}
 
 	private void _updateMCPServerConfiguration(boolean enabled)
