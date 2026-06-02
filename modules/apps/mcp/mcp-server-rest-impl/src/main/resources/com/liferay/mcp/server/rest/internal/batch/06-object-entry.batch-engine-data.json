@@ -46,12 +46,12 @@
 			"replacementValue": ".0/24"
 		},
 		{
-			"description": "Detect IPv6 addresses and replace each one with its /48 prefix.",
-			"detectionRegex": "\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b",
+			"description": "Detect IPv6 addresses, expanded or compressed, and replace each one with its /48 prefix.",
+			"detectionRegex": "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{0,4}::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{0,4}",
 			"externalReferenceCode": "L_MCP_SERVER_DATA_MASK_IPV6",
 			"maskType": "system",
 			"name": "IPv6 Address",
-			"replacementRegex": ":[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){4}$",
+			"replacementRegex": "(::.*$)|(:[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){4}$)",
 			"replacementValue": "::/48"
 		},
 		{
