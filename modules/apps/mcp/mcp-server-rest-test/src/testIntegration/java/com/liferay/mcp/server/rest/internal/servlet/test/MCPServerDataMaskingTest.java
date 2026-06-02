@@ -159,6 +159,21 @@ public class MCPServerDataMaskingTest {
 			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_SSN)));
 	}
 
+	@FeatureFlags(featureFlags = @FeatureFlag("LPD-90204"))
+	@Test
+	public void testCreditCardIsRedactedAcrossFormats() throws Exception {
+		String redactedText = _dataMaskingService.redact(
+			TestPropsValues.getCompanyId(),
+			Arrays.asList("L_MCP_SERVER_DATA_MASK_CREDIT_CARD_NUMBER"),
+			"Cards: 4111111111111111, 4111 1111 1111 1111, " +
+				"4111-1111-1111-1111.");
+
+		Assert.assertEquals(
+			"Cards: [CREDIT_CARD_NUMBER], [CREDIT_CARD_NUMBER], " +
+				"[CREDIT_CARD_NUMBER].",
+			redactedText);
+	}
+
 	@FeatureFlags(
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
@@ -295,6 +310,18 @@ public class MCPServerDataMaskingTest {
 			CoreMatchers.not(CoreMatchers.containsString("[EMAIL_ADDRESS]")));
 	}
 
+	@FeatureFlags(featureFlags = @FeatureFlag("LPD-90204"))
+	@Test
+	public void testEmailIsRedactedAcrossFormats() throws Exception {
+		String redactedText = _dataMaskingService.redact(
+			TestPropsValues.getCompanyId(),
+			Arrays.asList("L_MCP_SERVER_DATA_MASK_EMAIL_ADDRESS"),
+			"Emails: a.b+tag@sub.example.co.uk and USER@EXAMPLE.COM.");
+
+		Assert.assertEquals(
+			"Emails: [EMAIL_ADDRESS] and [EMAIL_ADDRESS].", redactedText);
+	}
+
 	@FeatureFlags(
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
@@ -360,6 +387,21 @@ public class MCPServerDataMaskingTest {
 			CoreMatchers.not(CoreMatchers.containsString(_SAMPLE_EMAIL)));
 	}
 
+	@FeatureFlags(featureFlags = @FeatureFlag("LPD-90204"))
+	@Test
+	public void testIBANIsRedactedAcrossFormats() throws Exception {
+		String redactedText = _dataMaskingService.redact(
+			TestPropsValues.getCompanyId(),
+			Arrays.asList("L_MCP_SERVER_DATA_MASK_IBAN"),
+			"IBANs: DE89 3704 0044 0532 0130 00, NL91ABNA0417164300, " +
+				"GB29NWBK60161331926819.");
+
+		Assert.assertEquals(
+			"IBANs: [BANK_ACCOUNT_NUMBER], [BANK_ACCOUNT_NUMBER], " +
+				"[BANK_ACCOUNT_NUMBER].",
+			redactedText);
+	}
+
 	@FeatureFlags(
 		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
 	)
@@ -390,6 +432,27 @@ public class MCPServerDataMaskingTest {
 		Assert.assertThat(
 			responseText,
 			CoreMatchers.not(CoreMatchers.containsString("[EMAIL_ADDRESS]")));
+	}
+
+	@FeatureFlags(featureFlags = @FeatureFlag("LPD-90204"))
+	@Test
+	public void testPhoneIsRedactedAcrossFormats() throws Exception {
+		String redactedText = _dataMaskingService.redact(
+			TestPropsValues.getCompanyId(),
+			Arrays.asList("L_MCP_SERVER_DATA_MASK_PHONE_NUMBER"),
+			"Phones: +1 (202) 555-0199, +34600123456 and +44 20 7946 0958.");
+
+		Assert.assertThat(
+			redactedText, CoreMatchers.containsString("[PHONE_NUMBER]"));
+		Assert.assertThat(
+			redactedText,
+			CoreMatchers.not(CoreMatchers.containsString("0199")));
+		Assert.assertThat(
+			redactedText,
+			CoreMatchers.not(CoreMatchers.containsString("34600123456")));
+		Assert.assertThat(
+			redactedText,
+			CoreMatchers.not(CoreMatchers.containsString("0958")));
 	}
 
 	@FeatureFlags(
