@@ -110,9 +110,7 @@ public class MCPServerProfileObjectEntryModelListener
 
 			Map<String, Serializable> maskValues = maskObjectEntry.getValues();
 
-			if (!Objects.equals(maskValues.get("maskType"), "system") ||
-				!GetterUtil.getBoolean(maskValues.get("active"), true)) {
-
+			if (!Objects.equals(maskValues.get("maskType"), "system")) {
 				continue;
 			}
 
@@ -124,8 +122,6 @@ public class MCPServerProfileObjectEntryModelListener
 						PARENT_OBJECT_ENTRY_FOLDER_ID_DEFAULT,
 					null,
 					HashMapBuilder.<String, Serializable>put(
-						"active", true
-					).put(
 						"executionOrder", executionOrder
 					).put(
 						"mcpServerProfileId",
@@ -165,35 +161,44 @@ public class MCPServerProfileObjectEntryModelListener
 
 		long profileObjectEntryId = profileObjectEntry.getObjectEntryId();
 
-		for (ObjectEntry profileDataMaskObjectEntry :
-				_objectEntryLocalService.getObjectEntries(
-					0, profileDataMaskObjectDefinition.getObjectDefinitionId(),
-					QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+		MCPServerProfileDataMaskThreadLocal.setSkipDeleteReasonValidation(true);
 
-			Map<String, Serializable> values =
-				profileDataMaskObjectEntry.getValues();
+		try {
+			for (ObjectEntry profileDataMaskObjectEntry :
+					_objectEntryLocalService.getObjectEntries(
+						0,
+						profileDataMaskObjectDefinition.getObjectDefinitionId(),
+						QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
 
-			long profileId = GetterUtil.getLong(
-				values.get("mcpServerProfileId"));
+				Map<String, Serializable> values =
+					profileDataMaskObjectEntry.getValues();
 
-			if (profileId != profileObjectEntryId) {
-				continue;
-			}
+				long profileId = GetterUtil.getLong(
+					values.get("mcpServerProfileId"));
 
-			try {
-				_objectEntryLocalService.deleteObjectEntry(
-					profileDataMaskObjectEntry.getObjectEntryId());
-			}
-			catch (PortalException portalException) {
-				if (_log.isWarnEnabled()) {
-					_log.warn(
-						StringBundler.concat(
-							"Unable to delete profile data mask ",
-							profileDataMaskObjectEntry.getObjectEntryId(),
-							" for profile ", profileObjectEntryId),
-						portalException);
+				if (profileId != profileObjectEntryId) {
+					continue;
+				}
+
+				try {
+					_objectEntryLocalService.deleteObjectEntry(
+						profileDataMaskObjectEntry.getObjectEntryId());
+				}
+				catch (PortalException portalException) {
+					if (_log.isWarnEnabled()) {
+						_log.warn(
+							StringBundler.concat(
+								"Unable to delete profile data mask ",
+								profileDataMaskObjectEntry.getObjectEntryId(),
+								" for profile ", profileObjectEntryId),
+							portalException);
+					}
 				}
 			}
+		}
+		finally {
+			MCPServerProfileDataMaskThreadLocal.setSkipDeleteReasonValidation(
+				false);
 		}
 	}
 
