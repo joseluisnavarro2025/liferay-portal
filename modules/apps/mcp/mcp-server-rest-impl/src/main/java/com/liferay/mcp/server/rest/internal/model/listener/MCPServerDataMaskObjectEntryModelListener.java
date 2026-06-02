@@ -5,12 +5,22 @@
 
 package com.liferay.mcp.server.rest.internal.model.listener;
 
+import com.liferay.batch.engine.thread.local.BatchEngineThreadLocal;
 import com.liferay.mcp.server.rest.internal.constants.MCPServerConstants;
+import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.model.listener.RelevantObjectEntryModelListener;
+import com.liferay.object.service.ObjectDefinitionLocalService;
+import com.liferay.object.service.ObjectEntryLocalService;
+import com.liferay.petra.string.StringBundler;
+import com.liferay.portal.kernel.dao.orm.QueryUtil;
 import com.liferay.portal.kernel.exception.ModelListenerException;
+import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.model.BaseModelListener;
 import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.portal.kernel.util.HashMapBuilder;
 
 import java.io.Serializable;
 
@@ -18,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * @author Jose Luis Navarro
@@ -33,23 +44,111 @@ public class MCPServerDataMaskObjectEntryModelListener
 	}
 
 	@Override
-	public void onBeforeUpdate(
-			ObjectEntry originalObjectEntry, ObjectEntry objectEntry)
+	public void onBeforeRemove(ObjectEntry objectEntry)
 		throws ModelListenerException {
 
-		Map<String, Serializable> originalValues =
-			originalObjectEntry.getValues();
-
-		if (!Objects.equals(originalValues.get("maskType"), "system")) {
+		if (BatchEngineThreadLocal.isBatchImportInProcess()) {
 			return;
 		}
 
 		Map<String, Serializable> values = objectEntry.getValues();
 
-		if (!GetterUtil.getBoolean(values.get("active"), true)) {
+		if (Objects.equals(values.get("maskType"), "system")) {
 			throw new ModelListenerException(
-				"System data masks cannot be deactivated");
+				"System data masks cannot be deleted");
+		}
+
+		_deleteProfileDataMasks(objectEntry);
+	}
+
+	@Override
+	public void onBeforeUpdate(
+			ObjectEntry originalObjectEntry, ObjectEntry objectEntry)
+		throws ModelListenerException {
+
+		if (BatchEngineThreadLocal.isBatchImportInProcess()) {
+			return;
+		}
+
+		Map<String, Serializable> originalValues =
+			originalObjectEntry.getValues();
+
+		if (Objects.equals(originalValues.get("maskType"), "system")) {
+			throw new ModelListenerException(
+				"System data masks cannot be updated");
 		}
 	}
+
+	private void _deleteProfileDataMasks(ObjectEntry maskObjectEntry) {
+		ObjectDefinition profileDataMaskObjectDefinition =
+			_objectDefinitionLocalService.
+				fetchObjectDefinitionByExternalReferenceCode(
+					MCPServerConstants.
+						EXTERNAL_REFERENCE_CODE_MCP_SERVER_PROFILE_DATA_MASK,
+					maskObjectEntry.getCompanyId());
+
+		if (profileDataMaskObjectDefinition == null) {
+			return;
+		}
+
+		long maskObjectEntryId = maskObjectEntry.getObjectEntryId();
+
+		MCPServerProfileDataMaskThreadLocal.setSkipDeleteReasonValidation(true);
+
+		try {
+			for (ObjectEntry profileDataMaskObjectEntry :
+					_objectEntryLocalService.getObjectEntries(
+						0,
+						profileDataMaskObjectDefinition.getObjectDefinitionId(),
+						QueryUtil.ALL_POS, QueryUtil.ALL_POS)) {
+
+				Map<String, Serializable> values =
+					profileDataMaskObjectEntry.getValues();
+
+				long maskId = GetterUtil.getLong(
+					values.get(
+						"r_dataMaskToProfileDataMasks_mcpServerDataMaskId"));
+
+				if (maskId != maskObjectEntryId) {
+					continue;
+				}
+
+				try {
+					profileDataMaskObjectEntry.setValues(
+						HashMapBuilder.<String, Serializable>putAll(
+							values
+						).put(
+							"deleteReason", "Mask deleted."
+						).build());
+
+					_objectEntryLocalService.deleteObjectEntry(
+						profileDataMaskObjectEntry);
+				}
+				catch (PortalException portalException) {
+					if (_log.isWarnEnabled()) {
+						_log.warn(
+							StringBundler.concat(
+								"Unable to delete profile data mask ",
+								profileDataMaskObjectEntry.getObjectEntryId(),
+								" for data mask ", maskObjectEntryId),
+							portalException);
+					}
+				}
+			}
+		}
+		finally {
+			MCPServerProfileDataMaskThreadLocal.setSkipDeleteReasonValidation(
+				false);
+		}
+	}
+
+	private static final Log _log = LogFactoryUtil.getLog(
+		MCPServerDataMaskObjectEntryModelListener.class);
+
+	@Reference
+	private ObjectDefinitionLocalService _objectDefinitionLocalService;
+
+	@Reference
+	private ObjectEntryLocalService _objectEntryLocalService;
 
 }

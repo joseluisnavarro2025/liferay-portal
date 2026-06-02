@@ -14,7 +14,6 @@ import com.liferay.petra.string.StringBundler;
 import com.liferay.portal.kernel.feature.flag.FeatureFlagManagerUtil;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
-import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.Validator;
 
 import java.io.Serializable;
@@ -110,10 +109,6 @@ public class DataMaskingEngine implements DataMaskingService {
 
 	private DataMask _buildDataMask(ObjectEntry maskObjectEntry) {
 		Map<String, Serializable> values = maskObjectEntry.getValues();
-
-		if (!GetterUtil.getBoolean(values.get("active"), true)) {
-			return null;
-		}
 
 		String detectionRegex = (String)values.get("detectionRegex");
 		String name = (String)values.get("name");
