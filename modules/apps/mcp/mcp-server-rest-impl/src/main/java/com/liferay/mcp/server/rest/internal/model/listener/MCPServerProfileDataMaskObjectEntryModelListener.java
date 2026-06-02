@@ -5,12 +5,12 @@
 
 package com.liferay.mcp.server.rest.internal.model.listener;
 
+import com.liferay.batch.engine.thread.local.BatchEngineThreadLocal;
 import com.liferay.mcp.server.rest.internal.constants.MCPServerConstants;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.model.listener.RelevantObjectEntryModelListener;
 import com.liferay.portal.kernel.exception.ModelListenerException;
 import com.liferay.portal.kernel.model.BaseModelListener;
-import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.Validator;
 
 import java.io.Serializable;
@@ -34,33 +34,21 @@ public class MCPServerProfileDataMaskObjectEntryModelListener
 	}
 
 	@Override
-	public void onBeforeCreate(ObjectEntry objectEntry)
+	public void onBeforeRemove(ObjectEntry objectEntry)
 		throws ModelListenerException {
 
-		_validateDisableReason(objectEntry);
-	}
+		if (MCPServerProfileDataMaskThreadLocal.
+				isSkipDeleteReasonValidation() ||
+			BatchEngineThreadLocal.isBatchImportInProcess()) {
 
-	@Override
-	public void onBeforeUpdate(
-			ObjectEntry originalObjectEntry, ObjectEntry objectEntry)
-		throws ModelListenerException {
-
-		_validateDisableReason(objectEntry);
-	}
-
-	private void _validateDisableReason(ObjectEntry objectEntry)
-		throws ModelListenerException {
-
-		Map<String, Serializable> values = objectEntry.getValues();
-
-		if (GetterUtil.getBoolean(values.get("active"), true)) {
 			return;
 		}
 
-		if (Validator.isNull((String)values.get("disableReason"))) {
+		Map<String, Serializable> values = objectEntry.getValues();
+
+		if (Validator.isNull((String)values.get("deleteReason"))) {
 			throw new ModelListenerException(
-				"Profile data mask cannot be deactivated without a disable " +
-					"reason");
+				"Profile data mask cannot be removed without a delete reason");
 		}
 	}
 

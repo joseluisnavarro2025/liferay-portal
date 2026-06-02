@@ -476,8 +476,7 @@ public class MCPServerServlet extends HttpServlet {
 			return Collections.emptyList();
 		}
 
-		List<ObjectEntry> activeProfileDataMaskObjectEntries =
-			new ArrayList<>();
+		List<ObjectEntry> profileDataMaskObjectEntries = new ArrayList<>();
 
 		for (ObjectEntry profileDataMaskObjectEntry :
 				_objectEntryLocalService.getObjectEntries(
@@ -490,16 +489,14 @@ public class MCPServerServlet extends HttpServlet {
 			long profileId = GetterUtil.getLong(
 				values.get("mcpServerProfileId"));
 
-			if ((profileId != profileObjectEntryId) ||
-				!GetterUtil.getBoolean(values.get("active"), true)) {
-
+			if (profileId != profileObjectEntryId) {
 				continue;
 			}
 
-			activeProfileDataMaskObjectEntries.add(profileDataMaskObjectEntry);
+			profileDataMaskObjectEntries.add(profileDataMaskObjectEntry);
 		}
 
-		activeProfileDataMaskObjectEntries.sort(
+		profileDataMaskObjectEntries.sort(
 			Comparator.comparing(
 				objectEntry -> GetterUtil.getInteger(
 					objectEntry.getValues(
@@ -511,7 +508,7 @@ public class MCPServerServlet extends HttpServlet {
 		List<String> maskExternalReferenceCodes = new ArrayList<>();
 
 		for (ObjectEntry profileDataMaskObjectEntry :
-				activeProfileDataMaskObjectEntries) {
+				profileDataMaskObjectEntries) {
 
 			long maskObjectEntryId = GetterUtil.getLong(
 				profileDataMaskObjectEntry.getValues(
