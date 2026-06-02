@@ -61,9 +61,30 @@ public class DataMaskTest {
 		Assert.assertSame(input, _emailMask().apply(input));
 	}
 
+	@Test
+	public void testApplyTruncatesCompressedIPv6ToPrefix() {
+		Assert.assertEquals(
+			"Connected from 2001:db8::/48",
+			_ipv6Mask().apply("Connected from 2001:db8::1"));
+	}
+
+	@Test
+	public void testApplyTruncatesExpandedIPv6ToPrefix() {
+		Assert.assertEquals(
+			"Connected from 2001:0db8:85a3::/48",
+			_ipv6Mask().apply(
+				"Connected from 2001:0db8:85a3:0000:0000:8a2e:0370:7334"));
+	}
+
 	private DataMask _emailMask() {
 		return new DataMask(
 			"Email addresses", _emailDetectionPattern, null, "[EMAIL_ADDRESS]");
+	}
+
+	private DataMask _ipv6Mask() {
+		return new DataMask(
+			"IPv6 → /48", _ipv6DetectionPattern, _ipv6ReplacementPattern,
+			"::/48");
 	}
 
 	private static final Pattern _emailDetectionPattern = Pattern.compile(
@@ -72,5 +93,10 @@ public class DataMaskTest {
 		"\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b");
 	private static final Pattern _ipv4ReplacementPattern = Pattern.compile(
 		"(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\.\\d{1,3}");
+	private static final Pattern _ipv6DetectionPattern = Pattern.compile(
+		"(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:)*" +
+			"[0-9a-fA-F]{0,4}::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{0,4}");
+	private static final Pattern _ipv6ReplacementPattern = Pattern.compile(
+		"(::.*$)|(:[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){4}$)");
 
 }
