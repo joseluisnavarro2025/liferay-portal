@@ -39,6 +39,7 @@ public class MCPServerProfileDataMaskObjectEntryModelListener
 
 		if (MCPServerProfileDataMaskThreadLocal.
 				isSkipDeleteReasonValidation() ||
+			// Restrict only for an osgi module
 			BatchEngineThreadLocal.isBatchImportInProcess()) {
 
 			return;

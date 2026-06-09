@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 /**
  * @author Jose Luis Navarro
  */
+// Move as inner class in the engine
 public class DataMask {
 
 	public DataMask(
@@ -23,6 +24,7 @@ public class DataMask {
 		_replacementValue = replacementValue;
 	}
 
+	// I think this belongs to the engine
 	public String apply(String text) {
 		Matcher matcher = _detectionPattern.matcher(text);
 

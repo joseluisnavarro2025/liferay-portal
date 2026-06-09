@@ -249,6 +249,8 @@ public class MCPServerServlet extends HttpServlet {
 			(HttpServletRequest)mcpTransportContext.get("httpServletRequest");
 
 		try {
+
+			// I think data masks should be created in the headless module
 			List<String> maskExternalReferenceCodes = _resolveDataMaskERCs(
 				companyId, profileObjectEntryId);
 
@@ -261,6 +263,7 @@ public class MCPServerServlet extends HttpServlet {
 			String content = (String)response.getEntity();
 
 			if (content != null) {
+				// Investigate to simplify from just 1 caller
 				content = _dataMaskingService.redact(
 					companyId, maskExternalReferenceCodes, content);
 			}

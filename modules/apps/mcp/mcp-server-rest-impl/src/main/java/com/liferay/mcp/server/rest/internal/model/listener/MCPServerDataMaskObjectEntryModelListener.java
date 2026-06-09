@@ -58,7 +58,10 @@ public class MCPServerDataMaskObjectEntryModelListener
 				"System data masks cannot be deleted");
 		}
 
+		// I think we should inline this method. It's name its confusing and it is only used once. I understand it deletes the relationships between the data masks and the profiles?
 		_deleteProfileDataMasks(objectEntry);
+
+		// Why not cascade?
 	}
 
 	@Override

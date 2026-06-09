@@ -27,6 +27,7 @@ import org.osgi.service.component.annotations.ServiceScope;
 )
 public class DataMaskResourceImpl extends BaseDataMaskResourceImpl {
 
+	// Would it make sense to do this as an object action instead of a full rest API as in https://github.com/liferay/liferay-portal/blob/18c7ae06848e70085cf222cb212d143e863ce9f9/modules/apps/commerce/commerce-service/src/main/java/com/liferay/commerce/internal/object/action/executor/SplitCommerceOrderByCatalogObjectActionExecutorImpl.java#L50?
 	@Override
 	public DataMaskValidationResult validateDataMask(
 			DataMaskValidationRequest dataMaskTestRequest)

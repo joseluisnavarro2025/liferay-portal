@@ -38,6 +38,7 @@ import org.osgi.service.component.annotations.ServiceScope;
  */
 @Component(
 	property = {
+		// This should apply globally
 		"osgi.jaxrs.application.select=(osgi.jaxrs.name=Liferay.MCP.Server)",
 		"osgi.jaxrs.extension=true",
 		"osgi.jaxrs.name=Liferay.Headless.Data.Masking.WriterInterceptor"
@@ -91,7 +92,13 @@ public class DataMaskingWriterInterceptor implements WriterInterceptor {
 
 	private boolean _isRedactableMediaType(MediaType mediaType) {
 		if ((mediaType != null) &&
+			(mediaType.isCompatible(MediaType.APPLICATION_JSON_TYPE) ||if ((mediaType != null) &&
 			(mediaType.isCompatible(MediaType.APPLICATION_JSON_TYPE) ||
+			 // Should we return the real content type from invokeTool?
+			 mediaType.isCompatible(MediaType.TEXT_PLAIN_TYPE))) {
+
+			return true;
+		}
 			 mediaType.isCompatible(MediaType.TEXT_PLAIN_TYPE))) {
 
 			return true;
