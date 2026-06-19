@@ -81,16 +81,13 @@ public class MCPServerDataMaskingTest {
 				dataMaskingPrefix + "03.object.entry"
 			});
 
-		MCPServerDataMaskTestUtil.deleteProfile("L_MCP_SERVER_DEFAULT_PROFILE");
-
 		String prefix = ".com.liferay.mcp.server.rest.internal.batch.";
 
 		BatchEngineTestUtil.processBatchEngineUnits(
 			"com.liferay.mcp.server.rest.impl", MCPServerDataMaskingTest.class,
 			new String[] {
 				prefix + "01.object.definition",
-				prefix + "02.object.definition",
-				prefix + "03.object.definition", prefix + "04.object.entry"
+				prefix + "02.object.definition", prefix + "03.object.definition"
 			});
 	}
 
@@ -299,7 +296,7 @@ public class MCPServerDataMaskingTest {
 				profileDataMaskObjectEntry.getObjectEntryId()));
 
 		MCPServerDataMaskTestUtil.removeProfileDataMask(
-			profileDataMaskObjectEntry, "Not required for this profile.");
+			profileDataMaskObjectEntry, RandomTestUtil.randomString());
 
 		Assert.assertNull(
 			_objectEntryLocalService.fetchObjectEntry(
@@ -460,7 +457,6 @@ public class MCPServerDataMaskingTest {
 	public void testSystemMasksAreSeededOnDefaultProfile() throws Exception {
 		ObjectEntry defaultProfileObjectEntry = _findProfile("default");
 
-		Assert.assertNotNull(defaultProfileObjectEntry);
 		Assert.assertEquals(
 			_SYSTEM_MASK_COUNT,
 			_countProfileDataMasks(
