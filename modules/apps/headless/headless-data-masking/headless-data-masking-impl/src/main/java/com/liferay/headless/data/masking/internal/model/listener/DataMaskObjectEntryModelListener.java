@@ -9,14 +9,18 @@ import com.liferay.batch.engine.unit.BatchEngineUnitThreadLocal;
 import com.liferay.headless.data.masking.engine.DataMaskingEngine;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.model.listener.RelevantObjectEntryModelListener;
+import com.liferay.petra.string.StringBundler;
 import com.liferay.portal.kernel.exception.ModelListenerException;
 import com.liferay.portal.kernel.model.BaseModelListener;
 import com.liferay.portal.kernel.security.auth.PrincipalException;
+import com.liferay.portal.kernel.util.Validator;
 
 import java.io.Serializable;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -67,6 +71,8 @@ public class DataMaskObjectEntryModelListener
 			throw new ModelListenerException(
 				new PrincipalException("Unable to create system data masks"));
 		}
+
+		_validateRegexes(values);
 	}
 
 	@Override
@@ -108,6 +114,8 @@ public class DataMaskObjectEntryModelListener
 			throw new ModelListenerException(
 				new PrincipalException("Unable to update system data masks"));
 		}
+
+		_validateRegexes(objectEntry.getValues());
 	}
 
 	private void _evictPatterns(ObjectEntry objectEntry) {
@@ -121,6 +129,36 @@ public class DataMaskObjectEntryModelListener
 		String fileName = BatchEngineUnitThreadLocal.getFileName();
 
 		return fileName.startsWith("com.liferay.headless.data.masking.impl_");
+	}
+
+	private void _validateRegex(String fieldLabel, String regex)
+		throws ModelListenerException {
+
+		try {
+			Pattern.compile(regex);
+		}
+		catch (PatternSyntaxException patternSyntaxException) {
+			throw new ModelListenerException(
+				StringBundler.concat(
+					"Invalid \"", fieldLabel, "\": ",
+					patternSyntaxException.getMessage()));
+		}
+	}
+
+	private void _validateRegexes(Map<String, Serializable> values)
+		throws ModelListenerException {
+
+		String detectionRegex = (String)values.get("detectionRegex");
+
+		if (Validator.isNotNull(detectionRegex)) {
+			_validateRegex("detectionRegex", detectionRegex);
+		}
+
+		String replacementRegex = (String)values.get("replacementRegex");
+
+		if (Validator.isNotNull(replacementRegex)) {
+			_validateRegex("replacementRegex", replacementRegex);
+		}
 	}
 
 	@Reference
