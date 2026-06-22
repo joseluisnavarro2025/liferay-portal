@@ -72,7 +72,7 @@ public class DataMaskObjectEntryModelListener
 				new PrincipalException("Unable to create system data masks"));
 		}
 
-		_validateRegexes(values);
+		_validateRegexes(objectEntry.getValues());
 	}
 
 	@Override
