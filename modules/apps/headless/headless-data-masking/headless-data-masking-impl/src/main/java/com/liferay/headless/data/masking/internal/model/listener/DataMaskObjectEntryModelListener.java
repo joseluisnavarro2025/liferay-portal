@@ -115,6 +115,18 @@ public class DataMaskObjectEntryModelListener
 				new PrincipalException("Unable to update system data masks"));
 		}
 
+		if (Objects.equals(
+				objectEntry.getValues(
+				).get(
+					"maskType"
+				),
+				"system")) {
+
+			throw new ModelListenerException(
+				new PrincipalException(
+					"Unable to convert data masks to system data masks"));
+		}
+
 		_validateRegexes(objectEntry.getValues());
 	}
 
