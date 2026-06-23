@@ -57,9 +57,13 @@ public class DataMaskObjectEntryModelListener
 			return;
 		}
 
-		Map<String, Serializable> values = objectEntry.getValues();
+		if (Objects.equals(
+				objectEntry.getValues(
+				).get(
+					"maskType"
+				),
+				"system")) {
 
-		if (Objects.equals(values.get("maskType"), "system")) {
 			throw new ModelListenerException(
 				new PrincipalException("Unable to create system data masks"));
 		}
@@ -73,9 +77,13 @@ public class DataMaskObjectEntryModelListener
 			return;
 		}
 
-		Map<String, Serializable> values = objectEntry.getValues();
+		if (Objects.equals(
+				objectEntry.getValues(
+				).get(
+					"maskType"
+				),
+				"system")) {
 
-		if (Objects.equals(values.get("maskType"), "system")) {
 			throw new ModelListenerException(
 				new PrincipalException("Unable to delete system data masks"));
 		}
@@ -90,10 +98,13 @@ public class DataMaskObjectEntryModelListener
 			return;
 		}
 
-		Map<String, Serializable> originalValues =
-			originalObjectEntry.getValues();
+		if (Objects.equals(
+				originalObjectEntry.getValues(
+				).get(
+					"maskType"
+				),
+				"system")) {
 
-		if (Objects.equals(originalValues.get("maskType"), "system")) {
 			throw new ModelListenerException(
 				new PrincipalException("Unable to update system data masks"));
 		}

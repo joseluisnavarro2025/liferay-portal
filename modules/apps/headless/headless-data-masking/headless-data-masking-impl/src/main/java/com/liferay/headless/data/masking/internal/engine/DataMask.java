@@ -38,13 +38,11 @@ public class DataMask {
 					sb, Matcher.quoteReplacement(_replacementValue));
 			}
 			else {
-				String matchedText = matcher.group();
-
-				Matcher replacementMatcher = _replacementPattern.matcher(
-					matchedText);
-
-				String replaced = replacementMatcher.replaceAll(
-					_replacementValue);
+				String replaced = _replacementPattern.matcher(
+					matcher.group()
+				).replaceAll(
+					_replacementValue
+				);
 
 				matcher.appendReplacement(
 					sb, Matcher.quoteReplacement(replaced));
