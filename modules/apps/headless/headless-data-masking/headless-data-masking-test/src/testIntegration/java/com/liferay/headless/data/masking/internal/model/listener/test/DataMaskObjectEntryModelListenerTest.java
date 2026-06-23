@@ -207,6 +207,38 @@ public class DataMaskObjectEntryModelListenerTest {
 		}
 	}
 
+	@FeatureFlags(
+		featureFlags = {@FeatureFlag("LPD-63311"), @FeatureFlag("LPD-90204")}
+	)
+	@Test
+	public void testOnBeforeUpdateCustomMaskToSystem() throws Exception {
+		ObjectEntry customMaskObjectEntry = DataMaskTestUtil.addCustomMask(
+			RandomTestUtil.randomString(), "\\d{4}",
+			RandomTestUtil.randomString());
+
+		try {
+			_updateMaskType(customMaskObjectEntry, "system");
+
+			Assert.fail();
+		}
+		catch (Exception exception) {
+			Assert.assertThat(
+				exception.getMessage(),
+				CoreMatchers.containsString(_SYSTEM_DATA_MASKS_MESSAGE));
+		}
+
+		ObjectEntry reloadedCustomMaskObjectEntry =
+			_objectEntryLocalService.getObjectEntry(
+				customMaskObjectEntry.getObjectEntryId());
+
+		Assert.assertEquals(
+			"custom",
+			reloadedCustomMaskObjectEntry.getValues(
+			).get(
+				"maskType"
+			));
+	}
+
 	private ObjectEntry _addSystemMask(ObjectDefinition objectDefinition)
 		throws Exception {
 
@@ -264,6 +296,20 @@ public class DataMaskObjectEntryModelListenerTest {
 		Map<String, Serializable> values = objectEntry.getValues();
 
 		return values.get("replacementValue");
+	}
+
+	private ObjectEntry _updateMaskType(
+			ObjectEntry objectEntry, String maskType)
+		throws Exception {
+
+		return _objectEntryLocalService.updateObjectEntry(
+			TestPropsValues.getUserId(), objectEntry.getObjectEntryId(), 0,
+			HashMapBuilder.<String, Serializable>putAll(
+				objectEntry.getValues()
+			).put(
+				"maskType", maskType
+			).build(),
+			ServiceContextTestUtil.getServiceContext());
 	}
 
 	private ObjectEntry _updateReplacementValue(
