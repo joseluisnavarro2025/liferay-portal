@@ -119,12 +119,60 @@ public class ToolSetResourceTest extends BaseToolSetResourceTestCase {
 		);
 	}
 
+	@Test
+	public void testGetToolSetsPageNumberOfTools() throws Exception {
+
+		// A statically registered tool set models one operation per registered
+		// JAX-RS method, so its number of tools is known without reading any
+		// OpenAPI document
+
+		ToolSet toolSet = _getToolSet("mcp-server-v1.0");
+
+		Assert.assertEquals(
+			_getToolSummariesTotalCount("mcp-server-v1.0"),
+			toolSet.getNumberOfTools());
+
+		// An object definition expands its paths once per action and once per
+		// relationship, so its number of tools stays unknown until its own
+		// document has been read
+
+		ObjectDefinition objectDefinition =
+			ObjectDefinitionTestUtil.publishObjectDefinition();
+
+		String restContextPath = objectDefinition.getRESTContextPath();
+
+		String toolSetName = "c-" + restContextPath.substring(3);
+
+		toolSet = _getToolSet(toolSetName);
+
+		Assert.assertNull(toolSet.getNumberOfTools());
+
+		Integer numberOfTools = _getToolSummariesTotalCount(toolSetName);
+
+		toolSet = _getToolSet(toolSetName);
+
+		Assert.assertEquals(numberOfTools, toolSet.getNumberOfTools());
+	}
+
 	private void _assertToolSet(Predicate<ToolSet> predicate) throws Exception {
 		Page<ToolSet> toolSetsPage = toolSetResource.getToolSetsPage();
 
 		Assert.assertTrue(
 			ListUtil.exists(
 				new ArrayList<>(toolSetsPage.getItems()), predicate));
+	}
+
+	private ToolSet _getToolSet(String toolSetName) throws Exception {
+		Page<ToolSet> toolSetsPage = toolSetResource.getToolSetsPage();
+
+		for (ToolSet toolSet : toolSetsPage.getItems()) {
+			if (Objects.equals(toolSetName, toolSet.getName())) {
+				return toolSet;
+			}
+		}
+
+		throw new AssertionError(
+			"No tool-set was found with name \"" + toolSetName + "\"");
 	}
 
 	private List<String> _getToolSetNames(String json) throws Exception {
@@ -141,6 +189,18 @@ public class ToolSetResourceTest extends BaseToolSetResourceTestCase {
 		}
 
 		return toolSetNames;
+	}
+
+	private Integer _getToolSummariesTotalCount(String toolSetName)
+		throws Exception {
+
+		JSONObject jsonObject = JSONFactoryUtil.createJSONObject(
+			HTTPTestUtil.invokeToString(
+				null,
+				"mcp-server/v1.0/tool-sets/" + toolSetName + "/tool-summaries",
+				Http.Method.GET));
+
+		return jsonObject.getInt("totalCount");
 	}
 
 	@DeleteAfterTestRun
