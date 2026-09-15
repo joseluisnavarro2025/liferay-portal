@@ -37,6 +37,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import jakarta.ws.rs.core.Response;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -78,7 +79,9 @@ public class ToolSetUtil {
 			toolName);
 	}
 
-	public static Page<ToolSet> getToolSetsPage() {
+	public static Page<ToolSet> getToolSetsPage(
+		HttpServletRequest httpServletRequest) {
+
 		Map<String, HeadlessApplicationProvider.OpenAPIDocument>
 			openAPIDocuments = _getOpenAPIDocuments();
 
@@ -96,6 +99,10 @@ public class ToolSetUtil {
 							});
 
 						setName(entry::getKey);
+
+						setNumberOfTools(
+							() -> _getNumberOfTools(
+								httpServletRequest, entry.getValue()));
 					}
 				}));
 	}
@@ -148,7 +155,7 @@ public class ToolSetUtil {
 			}
 
 			if (Objects.equals(toolName, "getToolSetsPage")) {
-				return _getResponse(getToolSetsPage());
+				return _getResponse(getToolSetsPage(httpServletRequest));
 			}
 
 			if (Objects.equals(toolName, "postToolSetToolSetNameToolInvoke")) {
@@ -199,6 +206,53 @@ public class ToolSetUtil {
 		).build();
 	}
 
+	private static String _getAPIPath(
+		HeadlessApplicationProvider.OpenAPIDocument openAPIDocument) {
+
+		HeadlessApplicationProvider.Application application =
+			openAPIDocument.getApplication();
+
+		String apiPath = application.getBasePath();
+
+		String version = openAPIDocument.getVersion();
+
+		if (version != null) {
+			apiPath += StringPool.SLASH + version;
+		}
+
+		return apiPath;
+	}
+
+	private static Integer _getCachedNumberOfTools(
+		HttpServletRequest httpServletRequest,
+		HeadlessApplicationProvider.OpenAPIDocument openAPIDocument) {
+
+		JSONObject openAPIJSONObject = _openAPIJSONObjects.get(
+			_getOpenAPIJSONObjectCacheKey(httpServletRequest, openAPIDocument));
+
+		// Generating a document costs far more than this listing is worth, so
+		// report an unknown number rather than paying for it here. The count
+		// appears once another endpoint has read the document.
+
+		if (openAPIJSONObject == null) {
+			return null;
+		}
+
+		try {
+			List<ToolSummary> toolSummaries = OpenAPIUtil.getToolSummaries(
+				openAPIJSONObject);
+
+			return toolSummaries.size();
+		}
+		catch (RuntimeException runtimeException) {
+			if (_log.isWarnEnabled()) {
+				_log.warn(runtimeException);
+			}
+
+			return null;
+		}
+	}
+
 	private static String _getContent(String content) {
 		if (Validator.isNull(content) || (content.charAt(0) != '{') ||
 			!content.contains("\"actions\"")) {
@@ -224,6 +278,51 @@ public class ToolSetUtil {
 
 			return content;
 		}
+	}
+
+	private static Integer _getNumberOfTools(
+		HttpServletRequest httpServletRequest,
+		HeadlessApplicationProvider.OpenAPIDocument openAPIDocument) {
+
+		Set<String> operations = new HashSet<>();
+
+		HeadlessApplicationProvider.Application application =
+			openAPIDocument.getApplication();
+
+		String apiPath = _getAPIPath(openAPIDocument);
+
+		for (HeadlessApplicationProvider.ResourceMethod resourceMethod :
+				application.getResourceMethods()) {
+
+			String method = resourceMethod.getMethod();
+			String path = resourceMethod.getPath();
+
+			if ((method == null) || (path == null) ||
+				!path.startsWith(apiPath)) {
+
+				continue;
+			}
+
+			// An object definition expands one of these templates into a path
+			// per action or per relationship, so only the tool set's own
+			// document knows how many tools it carries
+
+			if (_hasTemplatePathParameter(path)) {
+				return _getCachedNumberOfTools(
+					httpServletRequest, openAPIDocument);
+			}
+
+			operations.add(method + StringPool.SPACE + path);
+		}
+
+		// An application that registers every method on itself rather than on
+		// a resource models no operation here
+
+		if (operations.isEmpty()) {
+			return _getCachedNumberOfTools(httpServletRequest, openAPIDocument);
+		}
+
+		return operations.size();
 	}
 
 	private static HeadlessApplicationProvider.OpenAPIDocument
@@ -262,13 +361,7 @@ public class ToolSetUtil {
 			for (HeadlessApplicationProvider.OpenAPIDocument openAPIDocument :
 					application.getOpenAPIDocuments()) {
 
-				String apiPath = application.getBasePath();
-
-				String version = openAPIDocument.getVersion();
-
-				if (version != null) {
-					apiPath += StringPool.SLASH + version;
-				}
+				String apiPath = _getAPIPath(openAPIDocument);
 
 				openAPIDocuments.putIfAbsent(
 					StringUtil.replace(
@@ -286,10 +379,7 @@ public class ToolSetUtil {
 		String toolSetName) {
 
 		return _openAPIJSONObjects.computeIfAbsent(
-			StringBundler.concat(
-				PortalUtil.getCompanyId(httpServletRequest), StringPool.POUND,
-				openAPIDocument.getPath(
-					HeadlessApplicationProvider.OpenAPIDocument.Type.JSON)),
+			_getOpenAPIJSONObjectCacheKey(httpServletRequest, openAPIDocument),
 			key -> {
 				String content = openAPIDocument.getContentString(
 					PortalUtil.getPortalURL(httpServletRequest) +
@@ -311,6 +401,16 @@ public class ToolSetUtil {
 			});
 	}
 
+	private static String _getOpenAPIJSONObjectCacheKey(
+		HttpServletRequest httpServletRequest,
+		HeadlessApplicationProvider.OpenAPIDocument openAPIDocument) {
+
+		return StringBundler.concat(
+			PortalUtil.getCompanyId(httpServletRequest), StringPool.POUND,
+			openAPIDocument.getPath(
+				HeadlessApplicationProvider.OpenAPIDocument.Type.JSON));
+	}
+
 	private static Response _getResponse(Object value) throws Exception {
 		ObjectMapper objectMapper = ObjectMapperProviderUtil.getObjectMapper();
 
@@ -318,6 +418,22 @@ public class ToolSetUtil {
 			objectMapper.writeValueAsString(value), ContentTypes.TEXT_PLAIN_UTF8
 		).build();
 	}
+
+	private static boolean _hasTemplatePathParameter(String path) {
+		for (String templatePathParameter : _TEMPLATE_PATH_PARAMETERS) {
+			if (path.contains(templatePathParameter)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static final String[] _TEMPLATE_PATH_PARAMETERS = {
+		"{currentExternalReferenceCode", "{currentObjectEntryId",
+		"{objectActionName", "{objectEntryId", "{objectRelationshipName",
+		"{previousPath"
+	};
 
 	private static final String _TOOL_SET_NAME = "mcp-server-v1.0";
 
