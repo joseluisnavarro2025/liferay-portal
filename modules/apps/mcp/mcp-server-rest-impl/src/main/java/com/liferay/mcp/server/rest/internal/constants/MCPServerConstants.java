@@ -31,4 +31,11 @@ public class MCPServerConstants {
 	public static final String PATH_WELL_KNOWN_PROTECTED_RESOURCE =
 		"/.well-known/oauth-protected-resource";
 
+	public static final String PROFILE_STATUS_ACTIVE = "active";
+
+	public static final String PROFILE_STATUS_INACTIVE = "inactive";
+
+	public static final String RELATIONSHIP_NAME_MCP_SERVER_PROFILE_TO_TOOLS =
+		"mcpServerProfileToTools";
+
 }
