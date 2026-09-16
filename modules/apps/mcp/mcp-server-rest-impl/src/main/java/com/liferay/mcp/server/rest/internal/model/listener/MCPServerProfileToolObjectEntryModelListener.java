@@ -7,6 +7,7 @@ package com.liferay.mcp.server.rest.internal.model.listener;
 
 import com.liferay.mcp.server.rest.internal.constants.MCPServerConstants;
 import com.liferay.mcp.server.rest.internal.servlet.MCPServerServlet;
+import com.liferay.mcp.server.rest.internal.util.MCPServerProfileUtil;
 import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.model.ObjectRelationship;
@@ -20,6 +21,8 @@ import com.liferay.portal.kernel.dao.orm.QueryUtil;
 import com.liferay.portal.kernel.exception.ModelListenerException;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.model.BaseModelListener;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.util.StringUtil;
 import com.liferay.portal.kernel.util.Validator;
@@ -82,6 +85,8 @@ public class MCPServerProfileToolObjectEntryModelListener
 		throws ModelListenerException {
 
 		_invalidateServlet(objectEntry);
+
+		_deactivateMCPServerProfile(objectEntry);
 	}
 
 	@Override
@@ -93,24 +98,58 @@ public class MCPServerProfileToolObjectEntryModelListener
 		_validateTool(objectEntry);
 	}
 
-	private void _invalidateServlet(ObjectEntry objectEntry) {
-		ObjectDefinition objectDefinition =
-			_objectDefinitionLocalService.
-				fetchObjectDefinitionByExternalReferenceCode(
-					MCPServerConstants.
-						EXTERNAL_REFERENCE_CODE_MCP_SERVER_PROFILE,
-					objectEntry.getCompanyId());
+	private void _deactivateMCPServerProfile(ObjectEntry objectEntry)
+		throws ModelListenerException {
 
-		if (objectDefinition == null) {
+		ObjectEntry mcpServerProfileObjectEntry =
+			_fetchMCPServerProfileObjectEntry(objectEntry);
+
+		if ((mcpServerProfileObjectEntry == null) ||
+			!MCPServerProfileUtil.isActive(mcpServerProfileObjectEntry)) {
+
 			return;
 		}
 
+		try {
+
+			// ObjectEntryModelListener#onAfterRemove returns before it
+			// notifies the relevant object entry model listeners, so deal
+			// with the removal here, where the tool is still counted.
+
+			int toolsCount = MCPServerProfileUtil.getToolsCount(
+				mcpServerProfileObjectEntry, _objectEntryLocalService,
+				_objectRelationshipLocalService);
+
+			if (toolsCount > 1) {
+				return;
+			}
+
+			_objectEntryLocalService.partialUpdateObjectEntry(
+				mcpServerProfileObjectEntry.getUserId(),
+				mcpServerProfileObjectEntry.getObjectEntryId(),
+				mcpServerProfileObjectEntry.getObjectEntryFolderId(),
+				HashMapBuilder.<String, Serializable>put(
+					"profileStatus", MCPServerConstants.PROFILE_STATUS_INACTIVE
+				).build(),
+				new ServiceContext());
+		}
+		catch (PortalException portalException) {
+			throw new ModelListenerException(portalException);
+		}
+	}
+
+	private ObjectEntry _fetchMCPServerProfileObjectEntry(
+		ObjectEntry objectEntry) {
+
+		return _objectEntryLocalService.fetchObjectEntry(
+			MapUtil.getLong(
+				objectEntry.getValues(),
+				"r_mcpServerProfileToTools_l_mcpServerProfileId"));
+	}
+
+	private void _invalidateServlet(ObjectEntry objectEntry) {
 		ObjectEntry mcpServerProfileObjectEntry =
-			_objectEntryLocalService.fetchObjectEntry(
-				MapUtil.getString(
-					objectEntry.getValues(),
-					"r_mcpServerProfileToTools_l_mcpServerProfileERC"),
-				0, objectDefinition.getObjectDefinitionId());
+			_fetchMCPServerProfileObjectEntry(objectEntry);
 
 		if (mcpServerProfileObjectEntry == null) {
 			return;
