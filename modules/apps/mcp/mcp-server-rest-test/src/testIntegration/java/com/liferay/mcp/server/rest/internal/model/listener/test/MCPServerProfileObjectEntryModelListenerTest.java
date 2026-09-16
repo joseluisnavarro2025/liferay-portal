@@ -7,6 +7,8 @@ package com.liferay.mcp.server.rest.internal.model.listener.test;
 
 import com.liferay.arquillian.extension.junit.bridge.junit.Arquillian;
 import com.liferay.mcp.server.rest.test.util.MCPServerTestUtil;
+import com.liferay.object.constants.ObjectEntryFolderConstants;
+import com.liferay.object.exception.ObjectEntryValuesException;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.service.ObjectEntryLocalService;
 import com.liferay.portal.configuration.test.util.ConfigurationTemporarySwapper;
@@ -15,7 +17,9 @@ import com.liferay.portal.kernel.security.permission.PermissionCheckerFactoryUti
 import com.liferay.portal.kernel.security.permission.PermissionThreadLocal;
 import com.liferay.portal.kernel.test.rule.AggregateTestRule;
 import com.liferay.portal.kernel.test.util.RandomTestUtil;
+import com.liferay.portal.kernel.test.util.ServiceContextTestUtil;
 import com.liferay.portal.kernel.test.util.TestPropsValues;
+import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.HashMapDictionaryBuilder;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.test.rule.FeatureFlag;
@@ -94,6 +98,35 @@ public class MCPServerProfileObjectEntryModelListenerTest {
 	}
 
 	@Test
+	public void testOnBeforeCreateWithoutTools() throws Exception {
+		ObjectEntry mcpServerProfileObjectEntry =
+			MCPServerTestUtil.fetchMCPServerProfileObjectEntry("default");
+
+		try {
+			_objectEntryLocalService.addObjectEntry(
+				0, TestPropsValues.getUserId(),
+				mcpServerProfileObjectEntry.getObjectDefinitionId(),
+				ObjectEntryFolderConstants.
+					PARENT_OBJECT_ENTRY_FOLDER_ID_DEFAULT,
+				null,
+				HashMapBuilder.<String, Serializable>put(
+					"description", RandomTestUtil.randomString()
+				).put(
+					"name", RandomTestUtil.randomString()
+				).put(
+					"profileStatus", "active"
+				).build(),
+				ServiceContextTestUtil.getServiceContext());
+
+			Assert.fail(
+				"Created an active MCP server profile without any tools");
+		}
+		catch (Exception exception) {
+			_assertNoAssociatedToolsException(exception);
+		}
+	}
+
+	@Test
 	public void testOnBeforeRemove() throws Exception {
 		ObjectEntry mcpServerProfileObjectEntry =
 			MCPServerTestUtil.addMCPServerProfileObjectEntry(
@@ -153,6 +186,55 @@ public class MCPServerProfileObjectEntryModelListenerTest {
 				MCPServerTestUtil.getAuditedDeleteReason(
 					mcpServerProfileDataMaskObjectEntry));
 		}
+	}
+
+	@Test
+	public void testOnBeforeUpdateWithoutTools() throws Exception {
+		ObjectEntry mcpServerProfileObjectEntry =
+			MCPServerTestUtil.addMCPServerProfileObjectEntry(
+				RandomTestUtil.randomString(), RandomTestUtil.randomString());
+
+		Assert.assertEquals(
+			"inactive",
+			MapUtil.getString(
+				mcpServerProfileObjectEntry.getValues(), "profileStatus"));
+
+		try {
+			MCPServerTestUtil.updateMCPServerProfileStatus(
+				mcpServerProfileObjectEntry, "active");
+
+			Assert.fail("Activated an MCP server profile without any tools");
+		}
+		catch (Exception exception) {
+			_assertNoAssociatedToolsException(exception);
+		}
+	}
+
+	private void _assertNoAssociatedToolsException(Throwable throwable) {
+		Throwable causeThrowable = throwable.getCause();
+
+		while (causeThrowable != null) {
+			throwable = causeThrowable;
+
+			causeThrowable = throwable.getCause();
+		}
+
+		// Only an ObjectEntryValuesException is mapped to a 400 carrying a
+		// localized title. Any other type surfaces to the user as a 500.
+
+		Assert.assertTrue(
+			throwable.toString(),
+			throwable instanceof ObjectEntryValuesException);
+
+		ObjectEntryValuesException objectEntryValuesException =
+			(ObjectEntryValuesException)throwable;
+
+		Assert.assertEquals(
+			"MCP server profile has no associated tools",
+			objectEntryValuesException.getMessage());
+		Assert.assertEquals(
+			"this-profile-has-no-associated-tools",
+			objectEntryValuesException.getMessageKey());
 	}
 
 	private int _getMCPServerProfileDataMaskObjectEntriesCount(

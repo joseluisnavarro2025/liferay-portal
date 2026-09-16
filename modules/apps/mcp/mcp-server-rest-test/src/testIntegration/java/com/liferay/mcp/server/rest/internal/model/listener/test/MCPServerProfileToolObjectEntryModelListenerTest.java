@@ -27,6 +27,8 @@ import com.liferay.portal.test.rule.LiferayIntegrationTestRule;
 
 import java.io.Serializable;
 
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -130,6 +132,52 @@ public class MCPServerProfileToolObjectEntryModelListenerTest {
 				"\"mcp-server-profiles\" to MCP server profile \"",
 				_mcpServerProfileExternalReferenceCode, "\" more than once"),
 			() -> _addMCPServerProfileToolObjectEntry("description"));
+	}
+
+	@Test
+	public void testOnBeforeRemoveDeactivatesProfileWithoutTools()
+		throws Exception {
+
+		ObjectEntry mcpServerProfileObjectEntry =
+			MCPServerTestUtil.addMCPServerProfileObjectEntry(
+				RandomTestUtil.randomString(), RandomTestUtil.randomString(),
+				"mcp-server-profiles getMCPServerProfilesPage");
+
+		Assert.assertEquals(
+			"active", _getProfileStatus(mcpServerProfileObjectEntry));
+
+		_deleteMCPServerProfileToolObjectEntries(mcpServerProfileObjectEntry);
+
+		Assert.assertEquals(
+			"inactive", _getProfileStatus(mcpServerProfileObjectEntry));
+	}
+
+	@Test
+	public void testOnBeforeRemoveKeepsProfileWithRemainingTools()
+		throws Exception {
+
+		ObjectEntry mcpServerProfileObjectEntry =
+			MCPServerTestUtil.addMCPServerProfileObjectEntry(
+				RandomTestUtil.randomString(), RandomTestUtil.randomString(),
+				"mcp-server-profiles getMCPServerProfilesPage",
+				"mcp-server-v1.0 getToolSetsPage");
+
+		Assert.assertEquals(
+			"active", _getProfileStatus(mcpServerProfileObjectEntry));
+
+		List<ObjectEntry> mcpServerProfileToolObjectEntries =
+			MCPServerTestUtil.getMCPServerProfileToolObjectEntries(
+				mcpServerProfileObjectEntry);
+
+		Assert.assertEquals(
+			mcpServerProfileToolObjectEntries.toString(), 2,
+			mcpServerProfileToolObjectEntries.size());
+
+		_objectEntryLocalService.deleteObjectEntry(
+			mcpServerProfileToolObjectEntries.get(0));
+
+		Assert.assertEquals(
+			"active", _getProfileStatus(mcpServerProfileObjectEntry));
 	}
 
 	@Test
@@ -281,6 +329,18 @@ public class MCPServerProfileToolObjectEntryModelListenerTest {
 			() -> _addMCPServerProfileToolObjectEntry(restrictFields));
 	}
 
+	private void _deleteMCPServerProfileToolObjectEntries(
+			ObjectEntry mcpServerProfileObjectEntry)
+		throws Exception {
+
+		for (ObjectEntry objectEntry :
+				MCPServerTestUtil.getMCPServerProfileToolObjectEntries(
+					mcpServerProfileObjectEntry)) {
+
+			_objectEntryLocalService.deleteObjectEntry(objectEntry);
+		}
+	}
+
 	private JSONObject _getMCPServerProfileToolJSONObject(
 		String restrictFields) {
 
@@ -294,6 +354,15 @@ public class MCPServerProfileToolObjectEntryModelListenerTest {
 		).put(
 			"toolSetName", "mcp-server-profiles"
 		);
+	}
+
+	private String _getProfileStatus(ObjectEntry mcpServerProfileObjectEntry)
+		throws Exception {
+
+		ObjectEntry objectEntry = _objectEntryLocalService.getObjectEntry(
+			mcpServerProfileObjectEntry.getObjectEntryId());
+
+		return MapUtil.getString(objectEntry.getValues(), "profileStatus");
 	}
 
 	private String _mcpServerProfileExternalReferenceCode;
