@@ -65,6 +65,25 @@ async function createProfile(
 	return profile;
 }
 
+async function createActiveProfile(
+	apiHelpers: DataApiHelpers,
+	name: string
+): Promise<ObjectEntry> {
+	const profile = await createProfile(apiHelpers, name);
+
+	await createProfileTool(
+		apiHelpers,
+		profile.externalReferenceCode,
+		'getToolSetsPage'
+	);
+
+	return await apiHelpers.objectEntry.patchObjectEntry(
+		{profileStatus: {key: 'active'}},
+		PROFILES_API,
+		profile.id
+	);
+}
+
 async function trackUIProfileForCleanup(
 	apiHelpers: DataApiHelpers,
 	page: Page
@@ -171,6 +190,7 @@ test.describe('Profiles - FDS Table', () => {
 				'Title',
 				'Path',
 				'Description',
+				'Status',
 				'Last Modified',
 			]);
 		}
@@ -182,6 +202,7 @@ test.describe('Profiles - FDS Table', () => {
 		async ({fdsTablePage}) => {
 			await expectFDSTableSortOptions(fdsTablePage, [
 				'Title',
+				'Status',
 				'Last Modified',
 			]);
 		}
@@ -1039,6 +1060,133 @@ test.describe('Profiles - Tools tab', () => {
 
 			await expect(profilesPage.row('getToolSetsPage')).toBeVisible();
 			await expect(profilesPage.rows).toHaveCount(1);
+		}
+	);
+});
+
+test.describe('Profiles - Status', () => {
+	test(
+		'Shows the status of a profile in the list',
+		{tag: '@LPD-99378'},
+		async ({apiHelpers, profilesPage}) => {
+			const name = profileName();
+
+			await createProfile(apiHelpers, name);
+
+			await profilesPage.goto();
+			await profilesPage.search(name);
+
+			await expect(profilesPage.row(name)).toContainText('Inactive');
+		}
+	);
+
+	test(
+		'Sorts the table by status',
+		{tag: '@LPD-99378'},
+		async ({apiHelpers, profilesPage}) => {
+			const prefix = `pwstatus-${getRandomString()}`;
+
+			const activeName = `${prefix}-a`;
+			const inactiveName = `${prefix}-i`;
+
+			await createActiveProfile(apiHelpers, activeName);
+			await createProfile(apiHelpers, inactiveName);
+
+			await profilesPage.goto();
+			await profilesPage.search(prefix);
+
+			await profilesPage.orderButton.click();
+			await profilesPage.sortOption('Status').click();
+
+			await expect(profilesPage.rows).toHaveCount(2);
+			await expect(profilesPage.rows.first()).toContainText(activeName);
+		}
+	);
+
+	test(
+		'Filters the table by status',
+		{tag: '@LPD-99378'},
+		async ({apiHelpers, profilesPage}) => {
+			const prefix = `pwfilter-${getRandomString()}`;
+
+			const activeName = `${prefix}-a`;
+			const inactiveName = `${prefix}-i`;
+
+			await createActiveProfile(apiHelpers, activeName);
+			await createProfile(apiHelpers, inactiveName);
+
+			await profilesPage.goto();
+			await profilesPage.search(prefix);
+
+			await expect(profilesPage.rows).toHaveCount(2);
+
+			await profilesPage.applySelectionFilter('Status', 'Active');
+
+			await expect(profilesPage.row(activeName)).toBeVisible();
+			await expect(profilesPage.row(inactiveName)).toBeHidden();
+		}
+	);
+
+	test(
+		'Activates a profile with tools from the detail view',
+		{tag: '@LPD-99378'},
+		async ({apiHelpers, profilesPage}) => {
+			const name = profileName();
+
+			const profile = await createProfile(apiHelpers, name);
+
+			await createProfileTool(
+				apiHelpers,
+				profile.externalReferenceCode,
+				'getToolSetsPage'
+			);
+
+			await profilesPage.goto();
+			await profilesPage.search(name);
+			await profilesPage.clickAction(name, 'Edit');
+
+			await expect(profilesPage.statusToggle).not.toBeChecked();
+
+			await profilesPage.statusToggle.click();
+
+			await expect(profilesPage.statusToggle).toBeChecked();
+
+			await profilesPage.saveButton.click();
+
+			await expect(profilesPage.row(name)).toBeVisible();
+
+			const saved = await apiHelpers.get(
+				`${apiHelpers.baseUrl}${PROFILES_API}/by-external-reference-code/${profile.externalReferenceCode}`
+			);
+
+			expect(saved.profileStatus.key).toBe('active');
+		}
+	);
+
+	test(
+		'Deactivates a profile from the detail view',
+		{tag: '@LPD-99378'},
+		async ({apiHelpers, profilesPage}) => {
+			const name = profileName();
+
+			const profile = await createActiveProfile(apiHelpers, name);
+
+			await profilesPage.goto();
+			await profilesPage.search(name);
+			await profilesPage.clickAction(name, 'Edit');
+
+			await expect(profilesPage.statusToggle).toBeChecked();
+
+			await profilesPage.statusToggle.click();
+			await profilesPage.saveButton.click();
+
+			await expect(profilesPage.row(name)).toBeVisible();
+
+			const saved = await apiHelpers.get(
+				`${apiHelpers.baseUrl}${PROFILES_API}/by-external-reference-code/${profile.externalReferenceCode}`
+			);
+
+			expect(saved.profileStatus.key).toBe('inactive');
 		}
 	);
 });
