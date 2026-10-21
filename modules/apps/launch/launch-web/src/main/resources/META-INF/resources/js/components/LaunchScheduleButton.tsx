@@ -8,16 +8,15 @@ import {ClayInput} from '@clayui/form';
 import ClayIcon from '@clayui/icon';
 import ClayLabel from '@clayui/label';
 import ClayModal, {useModal} from '@clayui/modal';
-import {openModal, openToast} from 'frontend-js-components-web';
-import {escapeHTML, fetch} from 'frontend-js-web';
 import React, {useState} from 'react';
+
+import submitLaunchAction from '../util/submitLaunchAction';
 
 interface Props {
 	portletNamespace: string;
 	published: boolean;
 	scheduleLaunchURL: string;
 	scheduledDate: string | null;
-	unscheduleLaunchURL: string;
 }
 
 export default function LaunchScheduleButton({
@@ -25,7 +24,6 @@ export default function LaunchScheduleButton({
 	published,
 	scheduleLaunchURL,
 	scheduledDate,
-	unscheduleLaunchURL,
 }: Props) {
 	const [publishDate, setPublishDate] = useState('');
 	const [scheduleActive, setScheduleActive] = useState(false);
@@ -42,85 +40,16 @@ export default function LaunchScheduleButton({
 			String(new Date(publishDate).getTime())
 		);
 
-		submit(scheduleLaunchURL, body);
-	}
-
-	function handleUnschedule() {
-		openModal({
-			bodyHTML: escapeHTML(
-				Liferay.Language.get(
-					'unschedule-the-launch-will-delete-the-scheduled-job-and-the-launch-will-be-moved-to-open.-do-you-want-to-proceed'
-				)
-			),
-			buttons: [
-				{
-					displayType: 'secondary',
-					label: Liferay.Language.get('cancel'),
-					type: 'cancel',
-				},
-				{
-					autoFocus: true,
-					displayType: 'primary',
-					label: Liferay.Language.get('confirm'),
-					onClick: ({processClose}: {processClose: () => void}) => {
-						processClose();
-
-						submit(unscheduleLaunchURL);
-					},
-				},
-			],
-			role: 'alertdialog',
-			title: Liferay.Language.get('unschedule'),
-		});
-	}
-
-	async function submit(url: string, body: FormData = new FormData()) {
-		try {
-			const response = await fetch(url, {
-				body,
-				method: 'POST',
-			});
-
-			const {error, redirect, validationError} = await response.json();
-
-			if (error || validationError) {
-				openToast({
-					message: escapeHTML(error || validationError),
-					type: 'danger',
-				});
-
-				return;
-			}
-
-			window.location.href = redirect;
-		}
-		catch (exception) {
-			openToast({
-				message: escapeHTML((exception as Error).message),
-				type: 'danger',
-			});
-		}
+		submitLaunchAction(scheduleLaunchURL, body);
 	}
 
 	if (scheduledDate) {
 		return (
-			<div className="align-items-center c-gap-2 d-flex">
-				<ClayLabel className="m-0" displayType="info">
-					{`${Liferay.Language.get('scheduled')}: ${new Date(
-						scheduledDate
-					).toLocaleString()}`}
-				</ClayLabel>
-
-				<ClayButton
-					className="text-nowrap"
-					displayType="secondary"
-					onClick={handleUnschedule}
-					small
-					type="button"
-				>
-					{Liferay.Language.get('unschedule')}
-				</ClayButton>
-			</div>
+			<ClayLabel displayType="info">
+				{`${Liferay.Language.get('scheduled')}: ${new Date(
+					scheduledDate
+				).toLocaleString()}`}
+			</ClayLabel>
 		);
 	}
 
