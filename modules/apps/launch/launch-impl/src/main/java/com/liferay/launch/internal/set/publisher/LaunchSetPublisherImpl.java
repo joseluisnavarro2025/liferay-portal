@@ -43,6 +43,37 @@ import org.osgi.service.component.annotations.Reference;
 public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 
 	@Override
+	public void failPublish(long launchSetId, long userId, String errorMessage)
+		throws PortalException {
+
+		ObjectEntry launchSetObjectEntry =
+			_objectEntryLocalService.fetchObjectEntry(launchSetId);
+
+		if ((launchSetObjectEntry == null) ||
+			launchSetObjectEntry.isApproved()) {
+
+			return;
+		}
+
+		ServiceContext serviceContext = _createServiceContext(
+			launchSetObjectEntry, userId);
+
+		if (!launchSetObjectEntry.isDraft()) {
+			launchSetObjectEntry = _objectEntryLocalService.updateStatus(
+				userId, launchSetId, WorkflowConstants.STATUS_DRAFT,
+				serviceContext);
+		}
+
+		Map<String, Serializable> values = launchSetObjectEntry.getValues();
+
+		values.put("publishErrorMessage", errorMessage);
+
+		_objectEntryLocalService.updateObjectEntry(
+			userId, launchSetId, launchSetObjectEntry.getObjectEntryFolderId(),
+			values, serviceContext);
+	}
+
+	@Override
 	public void publish(long launchSetId) throws PortalException {
 		ObjectEntry launchSetObjectEntry =
 			_objectEntryLocalService.getObjectEntry(launchSetId);

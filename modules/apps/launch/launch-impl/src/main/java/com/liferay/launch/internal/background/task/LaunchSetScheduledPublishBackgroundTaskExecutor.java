@@ -28,6 +28,7 @@ import com.liferay.portal.kernel.service.UserLocalService;
 import com.liferay.portal.kernel.transaction.Propagation;
 import com.liferay.portal.kernel.transaction.TransactionConfig;
 import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
@@ -111,9 +112,10 @@ public class LaunchSetScheduledPublishBackgroundTaskExecutor
 					launchSetObjectEntry.getCompanyId());
 			}
 
-			_objectEntryLocalService.updateStatus(
-				statusByUserId, launchSetObjectEntry.getObjectEntryId(),
-				WorkflowConstants.STATUS_DRAFT, serviceContext);
+			_launchSetPublisher.failPublish(
+				launchSetObjectEntry.getObjectEntryId(), statusByUserId,
+				GetterUtil.getString(
+					throwable.getMessage(), String.valueOf(throwable)));
 
 			return new BackgroundTaskResult(
 				BackgroundTaskConstants.STATUS_FAILED, throwable.getMessage());
