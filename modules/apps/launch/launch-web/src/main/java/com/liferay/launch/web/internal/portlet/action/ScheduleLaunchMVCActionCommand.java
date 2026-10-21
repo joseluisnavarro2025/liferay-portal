@@ -9,29 +9,16 @@ import com.liferay.launch.set.publisher.LaunchSetPublisher;
 import com.liferay.launch.web.internal.constants.LaunchPortletKeys;
 import com.liferay.object.service.ObjectEntryLocalService;
 import com.liferay.object.service.ObjectEntryService;
-import com.liferay.portal.kernel.exception.PortalException;
-import com.liferay.portal.kernel.json.JSONObject;
 import com.liferay.portal.kernel.json.JSONUtil;
-import com.liferay.portal.kernel.language.Language;
-import com.liferay.portal.kernel.log.Log;
-import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.JSONPortletResponseUtil;
-import com.liferay.portal.kernel.portlet.bridges.mvc.BaseTransactionalMVCActionCommand;
 import com.liferay.portal.kernel.portlet.bridges.mvc.MVCActionCommand;
-import com.liferay.portal.kernel.security.auth.PrincipalException;
 import com.liferay.portal.kernel.security.permission.ActionKeys;
 import com.liferay.portal.kernel.theme.ThemeDisplay;
 import com.liferay.portal.kernel.util.ParamUtil;
-import com.liferay.portal.kernel.util.Portal;
 import com.liferay.portal.kernel.util.WebKeys;
 
 import jakarta.portlet.ActionRequest;
 import jakarta.portlet.ActionResponse;
-import jakarta.portlet.PortletException;
-
-import jakarta.servlet.http.HttpServletRequest;
-
-import java.io.IOException;
 
 import java.util.Date;
 
@@ -48,36 +35,7 @@ import org.osgi.service.component.annotations.Reference;
 	},
 	service = MVCActionCommand.class
 )
-public class ScheduleLaunchMVCActionCommand
-	extends BaseTransactionalMVCActionCommand {
-
-	@Override
-	public boolean processAction(
-			ActionRequest actionRequest, ActionResponse actionResponse)
-		throws PortletException {
-
-		try {
-			return super.processAction(actionRequest, actionResponse);
-		}
-		catch (PortletException portletException) {
-			if (!(portletException.getCause() instanceof PortalException)) {
-				throw portletException;
-			}
-
-			try {
-				JSONPortletResponseUtil.writeJSON(
-					actionRequest, actionResponse,
-					_getErrorJSONObject(
-						actionRequest,
-						(PortalException)portletException.getCause()));
-			}
-			catch (IOException ioException) {
-				throw new PortletException(ioException);
-			}
-		}
-
-		return false;
-	}
+public class ScheduleLaunchMVCActionCommand extends BaseLaunchMVCActionCommand {
 
 	@Override
 	protected void doTransactionalCommand(
@@ -94,8 +52,8 @@ public class ScheduleLaunchMVCActionCommand
 				actionRequest, actionResponse,
 				JSONUtil.put(
 					"validationError",
-					_language.get(
-						_portal.getHttpServletRequest(actionRequest),
+					language.get(
+						portal.getHttpServletRequest(actionRequest),
 						"the-publish-time-must-be-in-the-future")));
 
 			return;
@@ -117,38 +75,9 @@ public class ScheduleLaunchMVCActionCommand
 			actionRequest, actionResponse,
 			JSONUtil.put(
 				"redirect",
-				_portal.escapeRedirect(
+				portal.escapeRedirect(
 					ParamUtil.getString(actionRequest, "redirect"))));
 	}
-
-	private JSONObject _getErrorJSONObject(
-		ActionRequest actionRequest, Exception exception) {
-
-		HttpServletRequest httpServletRequest = _portal.getHttpServletRequest(
-			actionRequest);
-
-		if (exception instanceof PrincipalException) {
-			return JSONUtil.put(
-				"error",
-				_language.get(
-					httpServletRequest,
-					"you-do-not-have-the-required-permissions"));
-		}
-
-		if (_log.isWarnEnabled()) {
-			_log.warn(exception);
-		}
-
-		return JSONUtil.put(
-			"error",
-			_language.get(httpServletRequest, "an-unexpected-error-occurred"));
-	}
-
-	private static final Log _log = LogFactoryUtil.getLog(
-		ScheduleLaunchMVCActionCommand.class);
-
-	@Reference
-	private Language _language;
 
 	@Reference
 	private LaunchSetPublisher _launchSetPublisher;
@@ -158,8 +87,5 @@ public class ScheduleLaunchMVCActionCommand
 
 	@Reference
 	private ObjectEntryService _objectEntryService;
-
-	@Reference
-	private Portal _portal;
 
 }
