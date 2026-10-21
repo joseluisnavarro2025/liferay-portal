@@ -150,9 +150,14 @@ public class LaunchSetPublisherTest {
 			_objectEntryLocalService.getObjectEntry(
 				_launchSetObjectEntry.getObjectEntryId());
 
-		Assert.assertNotEquals(
-			WorkflowConstants.STATUS_APPROVED,
-			launchSetObjectEntry.getStatus());
+		Assert.assertEquals(
+			WorkflowConstants.STATUS_DRAFT, launchSetObjectEntry.getStatus());
+
+		Map<String, Serializable> values = _getValues(launchSetObjectEntry);
+
+		Assert.assertEquals(
+			"No launch entry manager exists for " + unknownClassName,
+			values.get("publishErrorMessage"));
 
 		_objectEntryLocalService.deleteObjectEntry(
 			unknownLaunchEntryObjectEntry);
