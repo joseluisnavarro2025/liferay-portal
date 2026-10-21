@@ -54,6 +54,8 @@ String scheduledDate = viewLaunchDisplayContext.getScheduledDate();
 						"scheduledDate", scheduledDate
 					).put(
 						"scheduleLaunchURL", viewLaunchDisplayContext.getScheduleLaunchURL()
+					).put(
+						"unscheduleLaunchURL", viewLaunchDisplayContext.getUnscheduleLaunchURL()
 					).build()
 				%>'
 			/>
