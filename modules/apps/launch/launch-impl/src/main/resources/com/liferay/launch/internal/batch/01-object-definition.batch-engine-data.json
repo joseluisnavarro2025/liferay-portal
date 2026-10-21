@@ -209,6 +209,24 @@
 					"unique": false
 				},
 				{
+					"DBType": "Clob",
+					"businessType": "LongText",
+					"externalReferenceCode": "PUBLISH_ERROR_MESSAGE",
+					"indexed": false,
+					"indexedAsKeyword": false,
+					"label": {
+						"en_US": "Publish Error Message"
+					},
+					"name": "publishErrorMessage",
+					"readOnly": "false",
+					"readOnlyConditionExpression": "",
+					"required": false,
+					"state": false,
+					"system": true,
+					"type": "String",
+					"unique": false
+				},
+				{
 					"DBType": "DateTime",
 					"businessType": "DateTime",
 					"externalReferenceCode": "SCHEDULED_DATE",
