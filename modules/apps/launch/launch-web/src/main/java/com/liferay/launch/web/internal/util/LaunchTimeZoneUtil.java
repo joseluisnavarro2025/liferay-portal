@@ -67,7 +67,7 @@ public class LaunchTimeZoneUtil {
 
 		String timeZoneId = timeZone.getID();
 
-		if (timeZoneId.contains("Phoenix")) {
+		if (timeZoneId.equals("America/Phoenix")) {
 			sb.append(" (");
 			sb.append(timeZoneId);
 			sb.append(")");

@@ -12,7 +12,7 @@ export default function openUnscheduleLaunchModal(unscheduleLaunchURL: string) {
 	openModal({
 		bodyHTML: escapeHTML(
 			Liferay.Language.get(
-				'unschedule-the-launch-will-delete-the-scheduled-job-and-the-launch-will-be-moved-to-open.-do-you-want-to-proceed'
+				'unscheduling-the-launch-will-delete-the-scheduled-job-and-the-launch-will-be-moved-to-open.-do-you-want-to-proceed'
 			)
 		),
 		buttons: [
