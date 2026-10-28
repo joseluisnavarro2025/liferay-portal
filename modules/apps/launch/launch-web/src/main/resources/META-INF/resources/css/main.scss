@@ -1,12 +1,20 @@
-.launch-screen-navigation {
-	position: relative;
+.launch-header {
+	align-items: center;
+	border-bottom: 1px solid var(--gray-300);
+	display: flex;
+	gap: 1rem;
+	justify-content: space-between;
+	padding: 0.75rem 1rem;
 
-	.launch-screen-navigation__actions {
+	.launch-header__actions,
+	.launch-header__title {
+		align-items: center;
 		display: flex;
-		gap: 0.5rem;
-		position: absolute;
-		right: 1rem;
-		top: 0.5rem;
-		z-index: 1;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.launch-header__title h2 {
+		font-size: 1.25rem;
 	}
 }

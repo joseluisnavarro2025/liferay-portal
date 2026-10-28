@@ -24,11 +24,25 @@ String scheduledDate = viewLaunchDisplayContext.getScheduledDate();
 
 <liferay-ui:error exception="<%= PortalException.class %>" message="unable-to-publish-the-launch" />
 
-<div class="launch-screen-navigation">
-	<div class="launch-screen-navigation__actions">
+<div class="launch-header">
+	<div class="launch-header__title">
+		<h2 class="mb-0 text-truncate"><%= HtmlUtil.escape(GetterUtil.getString(launchSetName)) %></h2>
 
 		<%-- A React component renders into its placeholder's parent, so each one needs a parent of its own --%>
 
+		<div>
+			<react:component
+				module="{LaunchScheduledLabel} from launch-web"
+				props='<%=
+					HashMapBuilder.<String, Object>put(
+						"scheduledDate", scheduledDate
+					).build()
+				%>'
+			/>
+		</div>
+	</div>
+
+	<div class="launch-header__actions">
 		<div>
 			<react:component
 				module="{LaunchPreviewButton} from launch-web"
@@ -46,62 +60,44 @@ String scheduledDate = viewLaunchDisplayContext.getScheduledDate();
 
 		<div>
 			<react:component
-				module="{LaunchScheduleButton} from launch-web"
+				module="{LaunchPublishButton} from launch-web"
 				props='<%=
 					HashMapBuilder.<String, Object>put(
+						"launchSetName", GetterUtil.getString(launchSetName)
+					).put(
 						"published", viewLaunchDisplayContext.isPublished()
 					).put(
-						"scheduledDate", scheduledDate
+						"publishLaunchURL", viewLaunchDisplayContext.getPublishLaunchURL()
+					).put(
+						"scheduled", scheduledDate != null
 					).put(
 						"scheduleLaunchURL", viewLaunchDisplayContext.getScheduleLaunchURL()
-					).build()
-				%>'
-			/>
-		</div>
-
-		<div>
-			<react:component
-				module="{LaunchUnscheduleButton} from launch-web"
-				props='<%=
-					HashMapBuilder.<String, Object>put(
-						"scheduled", scheduledDate != null
+					).put(
+						"timeZoneId", viewLaunchDisplayContext.getTimeZoneId()
+					).put(
+						"timeZones", viewLaunchDisplayContext.getTimeZonesJSONArray()
 					).put(
 						"unscheduleLaunchURL", viewLaunchDisplayContext.getUnscheduleLaunchURL()
 					).build()
 				%>'
 			/>
 		</div>
-
-		<div>
-			<react:component
-				module="{LaunchPublishButton} from launch-web"
-				props='<%=
-					HashMapBuilder.<String, Object>put(
-						"published", viewLaunchDisplayContext.isPublished()
-					).put(
-						"publishLaunchURL", viewLaunchDisplayContext.getPublishLaunchURL()
-					).put(
-						"scheduled", scheduledDate != null
-					).build()
-				%>'
-			/>
-		</div>
 	</div>
-
-	<liferay-frontend:screen-navigation
-		context="<%= new LaunchSet(viewLaunchDisplayContext.getLaunchSetId(), launchSetName) %>"
-		key="<%= LaunchScreenNavigationConstants.SCREEN_NAVIGATION_KEY_LAUNCH %>"
-		navCssClass="container-fluid-max-xxxl"
-		portletURL='<%=
-			PortletURLBuilder.createRenderURL(
-				renderResponse
-			).setMVCRenderCommandName(
-				"/launch/view_launch"
-			).setParameter(
-				"launchSetId", viewLaunchDisplayContext.getLaunchSetId()
-			).setParameter(
-				"launchSetName", launchSetName
-			).build()
-		%>'
-	/>
 </div>
+
+<liferay-frontend:screen-navigation
+	context="<%= new LaunchSet(viewLaunchDisplayContext.getLaunchSetId(), launchSetName) %>"
+	key="<%= LaunchScreenNavigationConstants.SCREEN_NAVIGATION_KEY_LAUNCH %>"
+	navCssClass="container-fluid-max-xxxl"
+	portletURL='<%=
+		PortletURLBuilder.createRenderURL(
+			renderResponse
+		).setMVCRenderCommandName(
+			"/launch/view_launch"
+		).setParameter(
+			"launchSetId", viewLaunchDisplayContext.getLaunchSetId()
+		).setParameter(
+			"launchSetName", launchSetName
+		).build()
+	%>'
+/>

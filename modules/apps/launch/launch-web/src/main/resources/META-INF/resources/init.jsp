@@ -21,7 +21,9 @@ page import="com.liferay.launch.web.internal.display.context.ViewLaunchesDisplay
 page import="com.liferay.launch.web.internal.model.LaunchSet" %><%@
 page import="com.liferay.portal.kernel.exception.PortalException" %><%@
 page import="com.liferay.portal.kernel.portlet.url.builder.PortletURLBuilder" %><%@
+page import="com.liferay.portal.kernel.util.GetterUtil" %><%@
 page import="com.liferay.portal.kernel.util.HashMapBuilder" %><%@
+page import="com.liferay.portal.kernel.util.HtmlUtil" %><%@
 page import="com.liferay.portal.kernel.util.Validator" %>
 
 <liferay-theme:defineObjects />
