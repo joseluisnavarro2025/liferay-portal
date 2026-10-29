@@ -32,7 +32,7 @@ export interface Launch {
 	description?: string;
 	id: number;
 	name: string;
-	publishErrorMessage?: string;
+	publishErrorsCount?: number | string;
 	scheduledDate?: string;
 	status?: {code: number};
 }
@@ -52,7 +52,7 @@ export function getLaunchStatus(launch: Launch): LaunchStatus {
 		return 'scheduled';
 	}
 
-	if (launch.publishErrorMessage) {
+	if (Number(launch.publishErrorsCount) > 0) {
 		return 'failed';
 	}
 

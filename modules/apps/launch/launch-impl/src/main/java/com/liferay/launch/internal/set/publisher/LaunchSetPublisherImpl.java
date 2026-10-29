@@ -9,8 +9,10 @@ import com.liferay.launch.entry.manager.LaunchEntryManager;
 import com.liferay.launch.entry.manager.LaunchEntryManagerRegistry;
 import com.liferay.launch.internal.constants.LaunchDestinationNames;
 import com.liferay.launch.set.publisher.LaunchSetPublisher;
+import com.liferay.object.model.ObjectDefinition;
 import com.liferay.object.model.ObjectEntry;
 import com.liferay.object.model.ObjectRelationship;
+import com.liferay.object.service.ObjectDefinitionLocalService;
 import com.liferay.object.service.ObjectEntryLocalService;
 import com.liferay.object.service.ObjectRelationshipLocalService;
 import com.liferay.petra.string.StringBundler;
@@ -24,6 +26,7 @@ import com.liferay.portal.kernel.scheduler.TriggerFactory;
 import com.liferay.portal.kernel.security.auth.PrincipalThreadLocal;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.service.ServiceContextThreadLocal;
+import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
@@ -64,13 +67,10 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 				serviceContext);
 		}
 
-		Map<String, Serializable> values = launchSetObjectEntry.getValues();
+		_deleteLaunchSetErrorObjectEntries(launchSetObjectEntry);
 
-		values.put("publishErrorMessage", errorMessage);
-
-		_objectEntryLocalService.updateObjectEntry(
-			userId, launchSetId, launchSetObjectEntry.getObjectEntryFolderId(),
-			values, serviceContext);
+		_addLaunchSetErrorObjectEntry(
+			launchSetObjectEntry, errorMessage, userId);
 	}
 
 	@Override
@@ -84,6 +84,8 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			throw new PortalException(
 				"Launch set " + launchSetId + " was already published");
 		}
+
+		_deleteLaunchSetErrorObjectEntries(launchSetObjectEntry);
 
 		ObjectRelationship objectRelationship =
 			_objectRelationshipLocalService.getObjectRelationship(
@@ -211,6 +213,30 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			null, launchSetObjectEntry, serviceContext, userId);
 	}
 
+	private void _addLaunchSetErrorObjectEntry(
+			ObjectEntry launchSetObjectEntry, String message, long userId)
+		throws PortalException {
+
+		ObjectDefinition objectDefinition =
+			_objectDefinitionLocalService.getObjectDefinition(
+				launchSetObjectEntry.getCompanyId(), "LaunchSetError");
+
+		ServiceContext serviceContext = new ServiceContext();
+
+		serviceContext.setCompanyId(launchSetObjectEntry.getCompanyId());
+		serviceContext.setUserId(userId);
+
+		_objectEntryLocalService.addObjectEntry(
+			0, userId, objectDefinition.getObjectDefinitionId(), 0, null,
+			HashMapBuilder.<String, Serializable>put(
+				"message", message
+			).put(
+				"r_launchSetToLaunchSetErrors_c_launchSetId",
+				launchSetObjectEntry.getObjectEntryId()
+			).build(),
+			serviceContext);
+	}
+
 	private ServiceContext _createServiceContext(
 		ObjectEntry launchSetObjectEntry, long userId) {
 
@@ -221,6 +247,27 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 		serviceContext.setWorkflowAction(WorkflowConstants.ACTION_SAVE_DRAFT);
 
 		return serviceContext;
+	}
+
+	private void _deleteLaunchSetErrorObjectEntries(
+			ObjectEntry launchSetObjectEntry)
+		throws PortalException {
+
+		ObjectRelationship objectRelationship =
+			_objectRelationshipLocalService.getObjectRelationship(
+				launchSetObjectEntry.getObjectDefinitionId(),
+				"launchSetToLaunchSetErrors");
+
+		for (ObjectEntry launchSetErrorObjectEntry :
+				_objectEntryLocalService.getOneToManyObjectEntries(
+					launchSetObjectEntry.getGroupId(),
+					objectRelationship.getObjectRelationshipId(), null, false,
+					launchSetObjectEntry.getObjectEntryId(), true, null,
+					QueryUtil.ALL_POS, QueryUtil.ALL_POS, null)) {
+
+			_objectEntryLocalService.deleteObjectEntry(
+				launchSetErrorObjectEntry);
+		}
 	}
 
 	private String _getJobName(ObjectEntry launchSetObjectEntry) {
@@ -246,6 +293,9 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 
 	@Reference
 	private LaunchEntryManagerRegistry _launchEntryManagerRegistry;
+
+	@Reference
+	private ObjectDefinitionLocalService _objectDefinitionLocalService;
 
 	@Reference
 	private ObjectEntryLocalService _objectEntryLocalService;

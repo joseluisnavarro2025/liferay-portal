@@ -30,7 +30,6 @@ import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.util.ParamUtil;
 import com.liferay.portal.kernel.util.PortalUtil;
 import com.liferay.portal.kernel.util.URLCodec;
-import com.liferay.portal.kernel.util.Validator;
 import com.liferay.portal.kernel.util.WebKeys;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
@@ -306,9 +305,8 @@ public class ViewLaunchDisplayContext {
 			return "scheduled";
 		}
 
-		if (Validator.isNotNull(
-				MapUtil.getString(
-					objectEntry.getValues(), "publishErrorMessage"))) {
+		if (MapUtil.getLong(objectEntry.getValues(), "publishErrorsCount") >
+				0) {
 
 			return "failed";
 		}
