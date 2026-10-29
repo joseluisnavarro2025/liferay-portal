@@ -9,16 +9,10 @@ import com.liferay.launch.set.publisher.LaunchSetPublisher;
 import com.liferay.launch.web.internal.constants.LaunchPortletKeys;
 import com.liferay.portal.kernel.portlet.bridges.mvc.BaseMVCActionCommand;
 import com.liferay.portal.kernel.portlet.bridges.mvc.MVCActionCommand;
-import com.liferay.portal.kernel.security.auth.PrincipalThreadLocal;
-import com.liferay.portal.kernel.transaction.Propagation;
-import com.liferay.portal.kernel.transaction.TransactionConfig;
-import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
-import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.ParamUtil;
 
 import jakarta.portlet.ActionRequest;
 import jakarta.portlet.ActionResponse;
-import jakarta.portlet.PortletException;
 
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -41,39 +35,11 @@ public class PublishLaunchMVCActionCommand extends BaseMVCActionCommand {
 			ActionRequest actionRequest, ActionResponse actionResponse)
 		throws Exception {
 
-		long launchSetId = ParamUtil.getLong(actionRequest, "launchSetId");
-
-		try {
-			TransactionInvokerUtil.invoke(
-				_transactionConfig,
-				() -> {
-					_launchSetPublisher.publish(launchSetId);
-
-					return null;
-				});
-		}
-		catch (Throwable throwable) {
-			PortletException portletException = new PortletException(throwable);
-
-			try {
-				_launchSetPublisher.failPublish(
-					launchSetId, PrincipalThreadLocal.getUserId(),
-					GetterUtil.getString(
-						throwable.getMessage(), String.valueOf(throwable)));
-			}
-			catch (Exception exception) {
-				portletException.addSuppressed(exception);
-			}
-
-			throw portletException;
-		}
+		_launchSetPublisher.publish(
+			ParamUtil.getLong(actionRequest, "launchSetId"));
 
 		sendRedirect(actionRequest, actionResponse);
 	}
-
-	private static final TransactionConfig _transactionConfig =
-		TransactionConfig.Factory.create(
-			Propagation.REQUIRED, new Class<?>[] {Exception.class});
 
 	@Reference
 	private LaunchSetPublisher _launchSetPublisher;

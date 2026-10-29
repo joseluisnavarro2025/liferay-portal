@@ -19,6 +19,8 @@ import com.liferay.petra.string.StringBundler;
 import com.liferay.petra.string.StringPool;
 import com.liferay.portal.kernel.dao.orm.QueryUtil;
 import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.messaging.Message;
 import com.liferay.portal.kernel.scheduler.SchedulerEngineHelper;
 import com.liferay.portal.kernel.scheduler.StorageType;
@@ -26,13 +28,19 @@ import com.liferay.portal.kernel.scheduler.TriggerFactory;
 import com.liferay.portal.kernel.security.auth.PrincipalThreadLocal;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.service.ServiceContextThreadLocal;
+import com.liferay.portal.kernel.transaction.Propagation;
+import com.liferay.portal.kernel.transaction.TransactionConfig;
+import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.HashMapBuilder;
 import com.liferay.portal.kernel.util.MapUtil;
+import com.liferay.portal.kernel.util.Validator;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
 import java.io.Serializable;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 import org.osgi.service.component.annotations.Component;
@@ -58,19 +66,12 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			return;
 		}
 
-		ServiceContext serviceContext = _createServiceContext(
-			launchSetObjectEntry, userId);
-
-		if (!launchSetObjectEntry.isDraft()) {
-			launchSetObjectEntry = _objectEntryLocalService.updateStatus(
-				userId, launchSetId, WorkflowConstants.STATUS_DRAFT,
-				serviceContext);
-		}
-
 		_deleteLaunchSetErrorObjectEntries(launchSetObjectEntry);
 
 		_addLaunchSetErrorObjectEntry(
-			launchSetObjectEntry, errorMessage, userId);
+			null, launchSetObjectEntry, errorMessage, userId);
+
+		_updateStatusToDraft(launchSetObjectEntry, userId);
 	}
 
 	@Override
@@ -87,47 +88,60 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 
 		_deleteLaunchSetErrorObjectEntries(launchSetObjectEntry);
 
-		ObjectRelationship objectRelationship =
-			_objectRelationshipLocalService.getObjectRelationship(
-				launchSetObjectEntry.getObjectDefinitionId(),
-				"launchSetToLaunchEntries");
-
 		ServiceContext serviceContext =
 			ServiceContextThreadLocal.getServiceContext();
 
+		int failedCount = 0;
+
 		for (ObjectEntry launchEntryObjectEntry :
-				_objectEntryLocalService.getOneToManyObjectEntries(
-					launchSetObjectEntry.getGroupId(),
-					objectRelationship.getObjectRelationshipId(), null, false,
-					launchSetObjectEntry.getObjectEntryId(), true, null,
-					QueryUtil.ALL_POS, QueryUtil.ALL_POS, null)) {
+				_getOneToManyObjectEntries(
+					launchSetObjectEntry, "launchSetToLaunchEntries")) {
 
 			Map<String, Serializable> values =
 				launchEntryObjectEntry.getValues();
 
-			String className = MapUtil.getString(values, "className");
+			if ((MapUtil.getLong(values, "draftId") == 0) &&
+				Validator.isNotNull(MapUtil.getString(values, "versionKey"))) {
 
-			LaunchEntryManager launchEntryManager =
-				_launchEntryManagerRegistry.getLaunchEntryManager(className);
-
-			if (launchEntryManager == null) {
-				throw new PortalException(
-					"No launch entry manager exists for " + className);
+				continue;
 			}
 
-			LaunchEntryManager.Version version =
-				launchEntryManager.publishDraft(
-					MapUtil.getLong(values, "classPK"),
-					MapUtil.getLong(values, "draftId"));
+			try {
+				TransactionInvokerUtil.invoke(
+					_transactionConfig,
+					() -> {
+						_publishLaunchEntryObjectEntry(
+							launchEntryObjectEntry, serviceContext);
 
-			values.put("draftId", 0L);
-			values.put("versionKey", version.getVersionKey());
+						return null;
+					});
+			}
+			catch (Throwable throwable) {
+				if (_log.isDebugEnabled()) {
+					_log.debug(
+						"Unable to publish launch entry " +
+							launchEntryObjectEntry.getObjectEntryId(),
+						throwable);
+				}
 
-			_objectEntryLocalService.updateObjectEntry(
-				serviceContext.getUserId(),
-				launchEntryObjectEntry.getObjectEntryId(),
-				launchEntryObjectEntry.getObjectEntryFolderId(), values,
-				serviceContext);
+				failedCount++;
+
+				_addLaunchSetErrorObjectEntry(
+					launchEntryObjectEntry, launchSetObjectEntry,
+					GetterUtil.getString(
+						throwable.getMessage(), String.valueOf(throwable)),
+					serviceContext.getUserId());
+			}
+		}
+
+		if (failedCount > 0) {
+			_updateStatusToDraft(
+				launchSetObjectEntry, serviceContext.getUserId());
+
+			throw new PortalException(
+				StringBundler.concat(
+					"Unable to publish ", failedCount,
+					" launch entries of launch set ", launchSetId));
 		}
 
 		_objectEntryLocalService.updateStatus(
@@ -214,8 +228,15 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 	}
 
 	private void _addLaunchSetErrorObjectEntry(
+			ObjectEntry launchEntryObjectEntry,
 			ObjectEntry launchSetObjectEntry, String message, long userId)
 		throws PortalException {
+
+		long launchEntryId = 0;
+
+		if (launchEntryObjectEntry != null) {
+			launchEntryId = launchEntryObjectEntry.getObjectEntryId();
+		}
 
 		ObjectDefinition objectDefinition =
 			_objectDefinitionLocalService.getObjectDefinition(
@@ -229,6 +250,8 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 		_objectEntryLocalService.addObjectEntry(
 			0, userId, objectDefinition.getObjectDefinitionId(), 0, null,
 			HashMapBuilder.<String, Serializable>put(
+				"launchEntryId", launchEntryId
+			).put(
 				"message", message
 			).put(
 				"r_launchSetToLaunchSetErrors_c_launchSetId",
@@ -253,17 +276,9 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			ObjectEntry launchSetObjectEntry)
 		throws PortalException {
 
-		ObjectRelationship objectRelationship =
-			_objectRelationshipLocalService.getObjectRelationship(
-				launchSetObjectEntry.getObjectDefinitionId(),
-				"launchSetToLaunchSetErrors");
-
 		for (ObjectEntry launchSetErrorObjectEntry :
-				_objectEntryLocalService.getOneToManyObjectEntries(
-					launchSetObjectEntry.getGroupId(),
-					objectRelationship.getObjectRelationshipId(), null, false,
-					launchSetObjectEntry.getObjectEntryId(), true, null,
-					QueryUtil.ALL_POS, QueryUtil.ALL_POS, null)) {
+				_getOneToManyObjectEntries(
+					launchSetObjectEntry, "launchSetToLaunchSetErrors")) {
 
 			_objectEntryLocalService.deleteObjectEntry(
 				launchSetErrorObjectEntry);
@@ -274,6 +289,52 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 		return StringBundler.concat(
 			launchSetObjectEntry.getObjectEntryId(), StringPool.AT,
 			launchSetObjectEntry.getCompanyId());
+	}
+
+	private List<ObjectEntry> _getOneToManyObjectEntries(
+			ObjectEntry launchSetObjectEntry, String objectRelationshipName)
+		throws PortalException {
+
+		ObjectRelationship objectRelationship =
+			_objectRelationshipLocalService.getObjectRelationship(
+				launchSetObjectEntry.getObjectDefinitionId(),
+				objectRelationshipName);
+
+		return _objectEntryLocalService.getOneToManyObjectEntries(
+			launchSetObjectEntry.getGroupId(),
+			objectRelationship.getObjectRelationshipId(), null, false,
+			launchSetObjectEntry.getObjectEntryId(), true, null,
+			QueryUtil.ALL_POS, QueryUtil.ALL_POS, null);
+	}
+
+	private void _publishLaunchEntryObjectEntry(
+			ObjectEntry launchEntryObjectEntry, ServiceContext serviceContext)
+		throws PortalException {
+
+		Map<String, Serializable> values = launchEntryObjectEntry.getValues();
+
+		String className = MapUtil.getString(values, "className");
+
+		LaunchEntryManager launchEntryManager =
+			_launchEntryManagerRegistry.getLaunchEntryManager(className);
+
+		if (launchEntryManager == null) {
+			throw new PortalException(
+				"No launch entry manager exists for " + className);
+		}
+
+		LaunchEntryManager.Version version = launchEntryManager.publishDraft(
+			MapUtil.getLong(values, "classPK"),
+			MapUtil.getLong(values, "draftId"));
+
+		values.put("draftId", 0L);
+		values.put("versionKey", version.getVersionKey());
+
+		_objectEntryLocalService.updateObjectEntry(
+			serviceContext.getUserId(),
+			launchEntryObjectEntry.getObjectEntryId(),
+			launchEntryObjectEntry.getObjectEntryFolderId(), values,
+			serviceContext);
 	}
 
 	private void _updateScheduledDate(
@@ -289,6 +350,38 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			userId, launchSetObjectEntry.getObjectEntryId(),
 			launchSetObjectEntry.getObjectEntryFolderId(), values,
 			serviceContext);
+	}
+
+	private void _updateStatusToDraft(
+			ObjectEntry launchSetObjectEntry, long userId)
+		throws PortalException {
+
+		ObjectEntry currentLaunchSetObjectEntry =
+			_objectEntryLocalService.getObjectEntry(
+				launchSetObjectEntry.getObjectEntryId());
+
+		if (currentLaunchSetObjectEntry.isDraft()) {
+			return;
+		}
+
+		_objectEntryLocalService.updateStatus(
+			userId, launchSetObjectEntry.getObjectEntryId(),
+			WorkflowConstants.STATUS_DRAFT,
+			_createServiceContext(launchSetObjectEntry, userId));
+	}
+
+	private static final Log _log = LogFactoryUtil.getLog(
+		LaunchSetPublisherImpl.class);
+
+	private static final TransactionConfig _transactionConfig;
+
+	static {
+		TransactionConfig.Builder builder = new TransactionConfig.Builder();
+
+		builder.setPropagation(Propagation.REQUIRES_NEW);
+		builder.setRollbackForClasses(Exception.class);
+
+		_transactionConfig = builder.build();
 	}
 
 	@Reference

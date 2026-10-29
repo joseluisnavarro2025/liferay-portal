@@ -14,6 +14,7 @@ import com.liferay.portal.kernel.backgroundtask.BackgroundTaskResult;
 import com.liferay.portal.kernel.backgroundtask.BaseBackgroundTaskExecutor;
 import com.liferay.portal.kernel.backgroundtask.constants.BackgroundTaskConstants;
 import com.liferay.portal.kernel.backgroundtask.display.BackgroundTaskDisplay;
+import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.model.Group;
@@ -25,10 +26,6 @@ import com.liferay.portal.kernel.service.GroupLocalService;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.service.ServiceContextThreadLocal;
 import com.liferay.portal.kernel.service.UserLocalService;
-import com.liferay.portal.kernel.transaction.Propagation;
-import com.liferay.portal.kernel.transaction.TransactionConfig;
-import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
-import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
@@ -80,6 +77,26 @@ public class LaunchSetScheduledPublishBackgroundTaskExecutor
 		ServiceContextThreadLocal.pushServiceContext(serviceContext);
 
 		try {
+			return _publish(launchSetObjectEntry, serviceContext, userId);
+		}
+		finally {
+			ServiceContextThreadLocal.popServiceContext();
+		}
+	}
+
+	@Override
+	public BackgroundTaskDisplay getBackgroundTaskDisplay(
+		BackgroundTask backgroundTask) {
+
+		return null;
+	}
+
+	private BackgroundTaskResult _publish(
+			ObjectEntry launchSetObjectEntry, ServiceContext serviceContext,
+			long userId)
+		throws PortalException {
+
+		try {
 			Group group = _groupLocalService.getGroup(
 				launchSetObjectEntry.getCompanyId(), GroupConstants.GUEST);
 
@@ -89,21 +106,12 @@ public class LaunchSetScheduledPublishBackgroundTaskExecutor
 				_permissionCheckerFactory.create(
 					_userLocalService.getUser(userId)));
 			PrincipalThreadLocal.setName(userId);
-
-			TransactionInvokerUtil.invoke(
-				_transactionConfig,
-				() -> {
-					_launchSetPublisher.publish(
-						launchSetObjectEntry.getObjectEntryId());
-
-					return null;
-				});
 		}
-		catch (Throwable throwable) {
+		catch (PortalException portalException) {
 			_log.error(
 				"Unable to publish launch set " +
 					launchSetObjectEntry.getObjectEntryId(),
-				throwable);
+				portalException);
 
 			long statusByUserId = userId;
 
@@ -114,39 +122,33 @@ public class LaunchSetScheduledPublishBackgroundTaskExecutor
 
 			_launchSetPublisher.failPublish(
 				launchSetObjectEntry.getObjectEntryId(), statusByUserId,
-				GetterUtil.getString(
-					throwable.getMessage(), String.valueOf(throwable)));
+				portalException.getMessage());
 
 			return new BackgroundTaskResult(
-				BackgroundTaskConstants.STATUS_FAILED, throwable.getMessage());
+				BackgroundTaskConstants.STATUS_FAILED,
+				portalException.getMessage());
 		}
-		finally {
-			ServiceContextThreadLocal.popServiceContext();
+
+		try {
+			_launchSetPublisher.publish(
+				launchSetObjectEntry.getObjectEntryId());
+		}
+		catch (PortalException portalException) {
+			_log.error(
+				"Unable to publish launch set " +
+					launchSetObjectEntry.getObjectEntryId(),
+				portalException);
+
+			return new BackgroundTaskResult(
+				BackgroundTaskConstants.STATUS_FAILED,
+				portalException.getMessage());
 		}
 
 		return BackgroundTaskResult.SUCCESS;
 	}
 
-	@Override
-	public BackgroundTaskDisplay getBackgroundTaskDisplay(
-		BackgroundTask backgroundTask) {
-
-		return null;
-	}
-
 	private static final Log _log = LogFactoryUtil.getLog(
 		LaunchSetScheduledPublishBackgroundTaskExecutor.class);
-
-	private static final TransactionConfig _transactionConfig;
-
-	static {
-		TransactionConfig.Builder builder = new TransactionConfig.Builder();
-
-		builder.setPropagation(Propagation.REQUIRED);
-		builder.setRollbackForClasses(Exception.class);
-
-		_transactionConfig = builder.build();
-	}
 
 	@Reference
 	private GroupLocalService _groupLocalService;
