@@ -7,9 +7,12 @@ package com.liferay.launch.web.internal.portlet.action;
 
 import com.liferay.launch.set.publisher.LaunchSetPublisher;
 import com.liferay.launch.web.internal.constants.LaunchPortletKeys;
-import com.liferay.portal.kernel.portlet.bridges.mvc.BaseTransactionalMVCActionCommand;
+import com.liferay.portal.kernel.portlet.bridges.mvc.BaseMVCActionCommand;
 import com.liferay.portal.kernel.portlet.bridges.mvc.MVCActionCommand;
 import com.liferay.portal.kernel.security.auth.PrincipalThreadLocal;
+import com.liferay.portal.kernel.transaction.Propagation;
+import com.liferay.portal.kernel.transaction.TransactionConfig;
+import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.ParamUtil;
 
@@ -31,28 +34,30 @@ import org.osgi.service.component.annotations.Reference;
 	},
 	service = MVCActionCommand.class
 )
-public class PublishLaunchMVCActionCommand
-	extends BaseTransactionalMVCActionCommand {
+public class PublishLaunchMVCActionCommand extends BaseMVCActionCommand {
 
 	@Override
 	protected void doProcessAction(
 			ActionRequest actionRequest, ActionResponse actionResponse)
-		throws PortletException {
+		throws Exception {
+
+		long launchSetId = ParamUtil.getLong(actionRequest, "launchSetId");
 
 		try {
-			super.doProcessAction(actionRequest, actionResponse);
-		}
-		catch (PortletException portletException) {
-			Throwable throwable = portletException.getCause();
+			TransactionInvokerUtil.invoke(
+				_transactionConfig,
+				() -> {
+					_launchSetPublisher.publish(launchSetId);
 
-			if (throwable == null) {
-				throwable = portletException;
-			}
+					return null;
+				});
+		}
+		catch (Throwable throwable) {
+			PortletException portletException = new PortletException(throwable);
 
 			try {
 				_launchSetPublisher.failPublish(
-					ParamUtil.getLong(actionRequest, "launchSetId"),
-					PrincipalThreadLocal.getUserId(),
+					launchSetId, PrincipalThreadLocal.getUserId(),
 					GetterUtil.getString(
 						throwable.getMessage(), String.valueOf(throwable)));
 			}
@@ -62,18 +67,13 @@ public class PublishLaunchMVCActionCommand
 
 			throw portletException;
 		}
-	}
-
-	@Override
-	protected void doTransactionalCommand(
-			ActionRequest actionRequest, ActionResponse actionResponse)
-		throws Exception {
-
-		_launchSetPublisher.publish(
-			ParamUtil.getLong(actionRequest, "launchSetId"));
 
 		sendRedirect(actionRequest, actionResponse);
 	}
+
+	private static final TransactionConfig _transactionConfig =
+		TransactionConfig.Factory.create(
+			Propagation.REQUIRED, new Class<?>[] {Exception.class});
 
 	@Reference
 	private LaunchSetPublisher _launchSetPublisher;
