@@ -38,6 +38,13 @@ public class LaunchSetErrorsTableFDSView extends BaseTableFDSView {
 			fdsTableSchemaField -> fdsTableSchemaField.setContentRenderer(
 				"launchSetErrorEntry")
 		).add(
+			"severity", "severity",
+			fdsTableSchemaField -> fdsTableSchemaField.setContentRenderer(
+				"launchSetErrorSeverity"
+			).setSortable(
+				true
+			)
+		).add(
 			"dateCreated", "date",
 			fdsTableSchemaField -> fdsTableSchemaField.setContentRenderer(
 				"dateTime"

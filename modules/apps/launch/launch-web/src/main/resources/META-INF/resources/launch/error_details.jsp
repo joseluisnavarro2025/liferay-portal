@@ -14,6 +14,7 @@ ViewLaunchDisplayContext viewLaunchDisplayContext = (ViewLaunchDisplayContext)re
 <frontend-data-set:headless-display
 	additionalProps="<%= viewLaunchDisplayContext.getAdditionalProps() %>"
 	apiURL="<%= viewLaunchDisplayContext.getLaunchSetErrorsAPIURL() %>"
+	fdsSortItemList="<%= viewLaunchDisplayContext.getLaunchSetErrorsFDSSortItemList() %>"
 	id="<%= viewLaunchDisplayContext.getLaunchSetErrorsFDSName() %>"
 	propsTransformer="{LaunchSetErrorsFDSPropsTransformer} from launch-web"
 	style="fluid"

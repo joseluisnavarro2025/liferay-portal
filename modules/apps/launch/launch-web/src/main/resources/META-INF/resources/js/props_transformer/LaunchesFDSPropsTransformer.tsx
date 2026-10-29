@@ -13,15 +13,28 @@ interface CreationMenu {
 	primaryItems: Array<{[key: string]: unknown}>;
 }
 
+interface ItemAction {
+	data?: {id?: string};
+	[key: string]: unknown;
+}
+
 interface Props {
 	additionalProps: {viewLaunchURL: string};
 	creationMenu?: CreationMenu;
+	itemsActions?: ItemAction[];
 	[key: string]: unknown;
 }
+
+const ITEM_ACTION_VISIBILITIES: {
+	[key: string]: ((launch: Launch) => boolean) | undefined;
+} = {
+	'view-error-details': (launch) => getLaunchStatus(launch) === 'failed',
+};
 
 export default function LaunchesFDSPropsTransformer({
 	additionalProps,
 	creationMenu,
+	itemsActions,
 	...props
 }: Props) {
 	return {
@@ -78,5 +91,11 @@ export default function LaunchesFDSPropsTransformer({
 				},
 			],
 		},
+		itemsActions: itemsActions?.map((itemAction) => {
+			const isVisible =
+				ITEM_ACTION_VISIBILITIES[itemAction.data?.id ?? ''];
+
+			return isVisible ? {...itemAction, isVisible} : itemAction;
+		}),
 	};
 }

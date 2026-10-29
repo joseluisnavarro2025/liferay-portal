@@ -78,8 +78,12 @@ export interface LaunchSetError {
 	dateCreated?: string;
 	id: number;
 	launchEntryId: number;
+	launchEntryTitle?: string;
 	message: string;
+	severity: LaunchSetErrorSeverity;
 }
+
+export type LaunchSetErrorSeverity = 'critical' | 'error';
 
 export interface LaunchEntrySummary {
 	author: string;

@@ -46,7 +46,11 @@ export default function LaunchSetErrorEntryCell({
 	}, [launchEntryId]);
 
 	if (!launchEntry) {
-		return <span className="text-secondary">&mdash;</span>;
+		return itemData.launchEntryTitle ? (
+			<span>{itemData.launchEntryTitle}</span>
+		) : (
+			<span className="text-secondary">&mdash;</span>
+		);
 	}
 
 	return (

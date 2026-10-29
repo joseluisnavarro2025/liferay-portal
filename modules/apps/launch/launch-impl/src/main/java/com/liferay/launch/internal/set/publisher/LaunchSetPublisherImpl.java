@@ -33,6 +33,7 @@ import com.liferay.portal.kernel.transaction.TransactionConfig;
 import com.liferay.portal.kernel.transaction.TransactionInvokerUtil;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.HashMapBuilder;
+import com.liferay.portal.kernel.util.LocaleUtil;
 import com.liferay.portal.kernel.util.MapUtil;
 import com.liferay.portal.kernel.util.Validator;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
@@ -69,7 +70,7 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 		_deleteLaunchSetErrorObjectEntries(launchSetObjectEntry);
 
 		_addLaunchSetErrorObjectEntry(
-			null, launchSetObjectEntry, errorMessage, userId);
+			null, launchSetObjectEntry, errorMessage, "critical", userId);
 
 		_updateStatusToDraft(launchSetObjectEntry, userId);
 	}
@@ -130,7 +131,7 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 					launchEntryObjectEntry, launchSetObjectEntry,
 					GetterUtil.getString(
 						throwable.getMessage(), String.valueOf(throwable)),
-					serviceContext.getUserId());
+					"error", serviceContext.getUserId());
 			}
 		}
 
@@ -229,13 +230,16 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 
 	private void _addLaunchSetErrorObjectEntry(
 			ObjectEntry launchEntryObjectEntry,
-			ObjectEntry launchSetObjectEntry, String message, long userId)
+			ObjectEntry launchSetObjectEntry, String message, String severity,
+			long userId)
 		throws PortalException {
 
 		long launchEntryId = 0;
+		String launchEntryTitle = StringPool.BLANK;
 
 		if (launchEntryObjectEntry != null) {
 			launchEntryId = launchEntryObjectEntry.getObjectEntryId();
+			launchEntryTitle = _getLaunchEntryTitle(launchEntryObjectEntry);
 		}
 
 		ObjectDefinition objectDefinition =
@@ -252,10 +256,14 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 			HashMapBuilder.<String, Serializable>put(
 				"launchEntryId", launchEntryId
 			).put(
+				"launchEntryTitle", launchEntryTitle
+			).put(
 				"message", message
 			).put(
 				"r_launchSetToLaunchSetErrors_c_launchSetId",
 				launchSetObjectEntry.getObjectEntryId()
+			).put(
+				"severity", severity
 			).build(),
 			serviceContext);
 	}
@@ -289,6 +297,27 @@ public class LaunchSetPublisherImpl implements LaunchSetPublisher {
 		return StringBundler.concat(
 			launchSetObjectEntry.getObjectEntryId(), StringPool.AT,
 			launchSetObjectEntry.getCompanyId());
+	}
+
+	private String _getLaunchEntryTitle(ObjectEntry launchEntryObjectEntry) {
+		Map<String, Serializable> values = launchEntryObjectEntry.getValues();
+
+		LaunchEntryManager launchEntryManager =
+			_launchEntryManagerRegistry.getLaunchEntryManager(
+				MapUtil.getString(values, "className"));
+
+		if (launchEntryManager == null) {
+			return StringPool.BLANK;
+		}
+
+		LaunchEntryManager.Item item = launchEntryManager.fetchItem(
+			MapUtil.getLong(values, "classPK"));
+
+		if (item == null) {
+			return StringPool.BLANK;
+		}
+
+		return item.getTitle(LocaleUtil.getSiteDefault());
 	}
 
 	private List<ObjectEntry> _getOneToManyObjectEntries(

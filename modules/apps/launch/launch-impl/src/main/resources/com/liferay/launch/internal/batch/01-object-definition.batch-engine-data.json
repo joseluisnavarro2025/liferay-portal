@@ -188,6 +188,25 @@
 					"unique": false
 				},
 				{
+					"DBType": "String",
+					"businessType": "Text",
+					"externalReferenceCode": "LAUNCH_ENTRY_TITLE",
+					"indexed": true,
+					"indexedAsKeyword": false,
+					"indexedLanguageId": "en_US",
+					"label": {
+						"en_US": "Launch Entry Title"
+					},
+					"name": "launchEntryTitle",
+					"readOnly": "false",
+					"readOnlyConditionExpression": "",
+					"required": false,
+					"state": false,
+					"system": true,
+					"type": "String",
+					"unique": false
+				},
+				{
 					"DBType": "Clob",
 					"businessType": "LongText",
 					"externalReferenceCode": "MESSAGE",
@@ -198,6 +217,24 @@
 						"en_US": "Message"
 					},
 					"name": "message",
+					"readOnly": "false",
+					"readOnlyConditionExpression": "",
+					"required": true,
+					"state": false,
+					"system": true,
+					"type": "String",
+					"unique": false
+				},
+				{
+					"DBType": "String",
+					"businessType": "Text",
+					"externalReferenceCode": "SEVERITY",
+					"indexed": true,
+					"indexedAsKeyword": true,
+					"label": {
+						"en_US": "Severity"
+					},
+					"name": "severity",
 					"readOnly": "false",
 					"readOnlyConditionExpression": "",
 					"required": true,

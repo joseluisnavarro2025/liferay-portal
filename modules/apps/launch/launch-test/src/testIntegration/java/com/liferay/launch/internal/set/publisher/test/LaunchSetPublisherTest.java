@@ -170,8 +170,11 @@ public class LaunchSetPublisherTest {
 			unknownLaunchEntryObjectEntry.getObjectEntryId(),
 			MapUtil.getLong(values, "launchEntryId"));
 		Assert.assertEquals(
+			StringPool.BLANK, MapUtil.getString(values, "launchEntryTitle"));
+		Assert.assertEquals(
 			"No launch entry manager exists for " + unknownClassName,
 			MapUtil.getString(values, "message"));
+		Assert.assertEquals("error", MapUtil.getString(values, "severity"));
 
 		_objectEntryLocalService.deleteObjectEntry(
 			unknownLaunchEntryObjectEntry);
